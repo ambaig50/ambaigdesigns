@@ -1,0 +1,62 @@
+{
+  "minimalist": [
+    { "id": "bold", "name": "Bold Centered", "path": "../components/templates/minimalist/BoldCentered" },
+    { "id": "clean", "name": "Clean Layout", "path": "../components/templates/minimalist/CleanLayout" },
+    { "id": "modern", "name": "Modern Frame", "path": "../components/templates/minimalist/ModernFrame" },
+    { "id": "simple", "name": "Simple Border", "path": "../components/templates/minimalist/SimpleBorder" },
+    { "id": "light", "name": "Light Theme", "path": "../components/templates/minimalist/LightTheme" },
+    { "id": "dark", "name": "Dark Theme", "path": "../components/templates/minimalist/DarkTheme" },
+    { "id": "grid", "name": "Grid Layout", "path": "../components/templates/minimalist/GridLayout" },
+    { "id": "line", "name": "Line Divider", "path": "../components/templates/minimalist/LineDivider" },
+    { "id": "boxed", "name": "Boxed Text", "path": "../components/templates/minimalist/BoxedText" },
+    { "id": "contrast", "name": "High Contrast", "path": "../components/templates/minimalist/HighContrast" }
+  ],
+  "lifestyle": [
+    { "id": "desk", "name": "Desk Scene", "path": "../components/templates/lifestyle/DeskScene" },
+    { "id": "coffee", "name": "Coffee Break", "path": "../components/templates/lifestyle/CoffeeBreak" },
+    { "id": "routine", "name": "Morning Routine", "path": "../components/templates/lifestyle/MorningRoutine" },
+    { "id": "travel", "name": "Travel Snapshot", "path": "../components/templates/lifestyle/TravelSnapshot" },
+    { "id": "fitness", "name": "Fitness Layout", "path": "../components/templates/lifestyle/FitnessLayout" },
+    { "id": "reading", "name": "Reading Corner", "path": "../components/templates/lifestyle/ReadingCorner" },
+    { "id": "work", "name": "Workstation", "path": "../components/templates/lifestyle/Workstation" },
+    { "id": "relax", "name": "Relax Mode", "path": "../components/templates/lifestyle/RelaxMode" },
+    { "id": "shopping", "name": "Shopping Scene", "path": "../components/templates/lifestyle/ShoppingScene" },
+    { "id": "outdoor", "name": "Outdoor Walk", "path": "../components/templates/lifestyle/OutdoorWalk" }
+  ],
+  "nature": [
+    { "id": "leaf", "name": "Leaf Pattern", "path": "../components/templates/nature/LeafPattern" },
+    { "id": "mountain", "name": "Mountain Silhouette", "path": "../components/templates/nature/MountainSilhouette" },
+    { "id": "forest", "name": "Forest Canopy", "path": "../components/templates/nature/ForestCanopy" },
+    { "id": "river", "name": "River Flow", "path": "../components/templates/nature/RiverFlow" },
+    { "id": "sunset", "name": "Sunset Glow", "path": "../components/templates/nature/SunsetGlow" },
+    { "id": "beach", "name": "Beach Scene", "path": "../components/templates/nature/BeachScene" },
+    { "id": "flower", "name": "Flower Bloom", "path": "../components/templates/nature/FlowerBloom" },
+    { "id": "rain", "name": "Rain Drops", "path": "../components/templates/nature/RainDrops" },
+    { "id": "sky", "name": "Sky Horizon", "path": "../components/templates/nature/SkyHorizon" },
+    { "id": "wildlife", "name": "Wildlife Frame", "path": "../components/templates/nature/WildlifeFrame" }
+  ],
+  "business": [
+    { "id": "corporate", "name": "Corporate Blue", "path": "../components/templates/business/CorporateBlue" },
+    { "id": "chart", "name": "Chart Background", "path": "../components/templates/business/ChartBackground" },
+    { "id": "office", "name": "Office Desk", "path": "../components/templates/business/OfficeDesk" },
+    { "id": "headline", "name": "Bold Headline", "path": "../components/templates/business/BoldHeadline" },
+    { "id": "geo", "name": "Geometric Shapes", "path": "../components/templates/business/GeometricShapes" },
+    { "id": "info", "name": "Infographic Style", "path": "../components/templates/business/InfographicStyle" },
+    { "id": "slide", "name": "Presentation Slide", "path": "../components/templates/business/PresentationSlide" },
+    { "id": "tech", "name": "Tech Abstract", "path": "../components/templates/business/TechAbstract" },
+    { "id": "card", "name": "Business Card Overlay", "path": "../components/templates/business/BusinessCardOverlay" },
+    { "id": "darkpro", "name": "Dark Professional", "path": "../components/templates/business/DarkProfessional" }
+  ],
+  "food": [
+    { "id": "dish", "name": "Styled Dish Plate", "path": "../components/templates/food/StyledDish" },
+    { "id": "ingredients", "name": "Ingredients Flat Lay", "path": "../components/templates/food/IngredientsFlatLay" },
+    { "id": "recipe", "name": "Recipe Card Overlay", "path": "../components/templates/food/RecipeCard" },
+    { "id": "board", "name": "Cutting Board", "path": "../components/templates/food/CuttingBoard" },
+    { "id": "dessert", "name": "Dessert Showcase", "path": "../components/templates/food/DessertShowcase" },
+    { "id": "coffee", "name": "Coffee Beans", "path": "../components/templates/food/CoffeeBeans" },
+    { "id": "fruit", "name": "Fruit Basket", "path": "../components/templates/food/FruitBasket" },
+    { "id": "kitchen", "name": "Kitchen Counter", "path": "../components/templates/food/KitchenCounterFood" },
+    { "id": "menu", "name": "Chalkboard Menu", "path": "../components/templates/food/ChalkboardMenu" },
+    { "id": "rustic", "name": "Rustic Wooden Table", "path": "../components/templates/food/RusticTable" }
+  ]
+}
