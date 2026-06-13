@@ -1,6 +1,14 @@
 // pages/api/postToThreads.js
 export default async function handler(req, res) {
   const { caption } = req.body;
-  // TODO: Connect to Threads API
-  res.status(200).json({ success: true, platform: "Threads", caption });
+  const accessToken = process.env.THREADS_ACCESS_TOKEN;
+
+  const response = await fetch(`https://graph.facebook.com/v18.0/{threads_user_id}/threads`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}` },
+    body: new URLSearchParams({ text: caption })
+  });
+
+  const data = await response.json();
+  res.status(200).json({ success: true, platform: "Threads", data });
 }
