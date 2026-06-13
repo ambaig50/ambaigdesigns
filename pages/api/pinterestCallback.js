@@ -1,15 +1,20 @@
-// pages/api/pinterestCallback.js
+// pages/api/pinterestRefresh.js
 export default async function handler(req, res) {
-  const { code } = req.query;
-  const clientId = process.env.PINTEREST_CLIENT_ID;
-  const clientSecret = process.env.PINTEREST_CLIENT_SECRET;
-  const redirectUri = "http://localhost:3000/api/pinterestCallback";
+  const refreshToken = "stored_refresh_token"; // save this when user first connects
 
-  const tokenRes = await fetch(`https://graph.pinterest.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${redirectUri}&client_secret=${clientSecret}&code=${code}`);
-  const tokenData = await tokenRes.json();
+  const response = await fetch("https://api.pinterest.com/v5/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: process.env.PINTEREST_CLIENT_ID,
+      client_secret: process.env.PINTEREST_CLIENT_SECRET
+    })
+  });
 
-  // Save token securely (DB or server session)
-  console.log("Pinterest Access Token:", tokenData.access_token);
+  const data = await response.json();
+  console.log("New Pinterest access token:", data.access_token);
 
-  res.send("Pinterest connected successfully!");
+  res.json({ success: true, token: data.access_token });
 }
