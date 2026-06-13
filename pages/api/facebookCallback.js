@@ -17,5 +17,5 @@ export default async function handler(req, res) {
   // Save longToken.access_token securely (DB or env for testing)
   console.log("Long-lived Meta token:", longToken.access_token);
 
-  res.send("Facebook/Instagram/Threads connected with long-lived token!");
+  res.send("Facebook connected with long-lived token!");
 }
