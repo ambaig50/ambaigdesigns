@@ -1,0 +1,312 @@
+{
+  "minimalist": [
+    {
+      "id": "boldcentered",
+      "name": "Bold Centered",
+      "category": "minimalist",
+      "file": "BoldCentered"
+    },
+    {
+      "id": "circlebadge",
+      "name": "Circle Badge",
+      "category": "minimalist",
+      "file": "CircleBadge"
+    },
+    {
+      "id": "darkthemeaccent",
+      "name": "Dark Theme Accent",
+      "category": "minimalist",
+      "file": "DarkThemeAccent"
+    },
+    {
+      "id": "gridlayout",
+      "name": "Grid Layout",
+      "category": "minimalist",
+      "file": "GridLayout"
+    },
+    {
+      "id": "icontext",
+      "name": "Icon Text",
+      "category": "minimalist",
+      "file": "IconText"
+    },
+    {
+      "id": "monochromecontrast",
+      "name": "Monochrome Contrast",
+      "category": "minimalist",
+      "file": "MonochromeContrast"
+    },
+    {
+      "id": "pastelgradient",
+      "name": "Pastel Gradient",
+      "category": "minimalist",
+      "file": "PastelGradient"
+    },
+    {
+      "id": "quoteblock",
+      "name": "Quote Block",
+      "category": "minimalist",
+      "file": "QuoteBlock"
+    },
+    {
+      "id": "splitbackground",
+      "name": "Split Background",
+      "category": "minimalist",
+      "file": "SplitBackground"
+    },
+    {
+      "id": "underlineaccent",
+      "name": "Underline Accent",
+      "category": "minimalist",
+      "file": "UnderlineAccent"
+    }
+  ],
+  "lifestyle": [
+    {
+      "id": "coffeebreak",
+      "name": "Coffee Break",
+      "category": "lifestyle",
+      "file": "CoffeeBreak"
+    },
+    {
+      "id": "cozylivingroom",
+      "name": "Cozy Living Room",
+      "category": "lifestyle",
+      "file": "CozyLivingRoom"
+    },
+    {
+      "id": "deskscene",
+      "name": "Desk Scene",
+      "category": "lifestyle",
+      "file": "DeskScene"
+    },
+    {
+      "id": "journalcandle",
+      "name": "Journal Candle",
+      "category": "lifestyle",
+      "file": "JournalCandle"
+    },
+    {
+      "id": "kitchencounter",
+      "name": "Kitchen Counter",
+      "category": "lifestyle",
+      "file": "KitchenCounter"
+    },
+    {
+      "id": "morningroutine",
+      "name": "Morning Routine",
+      "category": "lifestyle",
+      "file": "MorningRoutine"
+    },
+    {
+      "id": "plannerpage",
+      "name": "Planner Page",
+      "category": "lifestyle",
+      "file": "PlannerPage"
+    },
+    {
+      "id": "stationaryflatlay",
+      "name": "Stationary Flat Lay",
+      "category": "lifestyle",
+      "file": "StationaryFlatLay"
+    },
+    {
+      "id": "travelessentials",
+      "name": "Travel Essentials",
+      "category": "lifestyle",
+      "file": "TravelEssentials"
+    },
+    {
+      "id": "workspaceplants",
+      "name": "Workspace Plants",
+      "category": "lifestyle",
+      "file": "WorkspacePlants"
+    }
+  ],
+  "nature": [
+    {
+      "id": "floralborder",
+      "name": "Floral Border",
+      "category": "nature",
+      "file": "FloralBorder"
+    },
+    {
+      "id": "forestcanopy",
+      "name": "Forest Canopy",
+      "category": "nature",
+      "file": "ForestCanopy"
+    },
+    {
+      "id": "grassfield",
+      "name": "Grass Field",
+      "category": "nature",
+      "file": "GrassField"
+    },
+    {
+      "id": "leafpattern",
+      "name": "Leaf Pattern",
+      "category": "nature",
+      "file": "LeafPattern"
+    },
+    {
+      "id": "mountainsilhouette",
+      "name": "Mountain Silhouette",
+      "category": "nature",
+      "file": "MountainSilhouette"
+    },
+    {
+      "id": "oceanwaves",
+      "name": "Ocean Waves",
+      "category": "nature",
+      "file": "OceanWaves"
+    },
+    {
+      "id": "skyclouds",
+      "name": "Sky Clouds",
+      "category": "nature",
+      "file": "SkyClouds"
+    },
+    {
+      "id": "sunsetgradient",
+      "name": "Sunset Gradient",
+      "category": "nature",
+      "file": "SunsetGradient"
+    },
+    {
+      "id": "treebark",
+      "name": "Tree Bark",
+      "category": "nature",
+      "file": "TreeBark"
+    },
+    {
+      "id": "waterripple",
+      "name": "Water Ripple",
+      "category": "nature",
+      "file": "WaterRipple"
+    }
+  ],
+  "business": [
+    {
+      "id": "boldheadline",
+      "name": "Bold Headline",
+      "category": "business",
+      "file": "BoldHeadline"
+    },
+    {
+      "id": "businesscardoverlay",
+      "name": "Business Card Overlay",
+      "category": "business",
+      "file": "BusinessCardOverlay"
+    },
+    {
+      "id": "chartbackground",
+      "name": "Chart Background",
+      "category": "business",
+      "file": "ChartBackground"
+    },
+    {
+      "id": "corporateblue",
+      "name": "Corporate Blue",
+      "category": "business",
+      "file": "CorporateBlue"
+    },
+    {
+      "id": "darkprofessional",
+      "name": "Dark Professional",
+      "category": "business",
+      "file": "DarkProfessional"
+    },
+    {
+      "id": "geometricshapes",
+      "name": "Geometric Shapes",
+      "category": "business",
+      "file": "GeometricShapes"
+    },
+    {
+      "id": "infographicstyle",
+      "name": "Infographic Style",
+      "category": "business",
+      "file": "InfographicStyle"
+    },
+    {
+      "id": "officedesk",
+      "name": "Office Desk",
+      "category": "business",
+      "file": "OfficeDesk"
+    },
+    {
+      "id": "presentationslide",
+      "name": "Presentation Slide",
+      "category": "business",
+      "file": "PresentationSlide"
+    },
+    {
+      "id": "techabstract",
+      "name": "Tech Abstract",
+      "category": "business",
+      "file": "TechAbstract"
+    }
+  ],
+  "food": [
+    {
+      "id": "chalkboardmenu",
+      "name": "Chalkboard Menu",
+      "category": "food",
+      "file": "ChalkboardMenu"
+    },
+    {
+      "id": "coffeebeans",
+      "name": "Coffee Beans",
+      "category": "food",
+      "file": "CoffeeBeans"
+    },
+    {
+      "id": "cuttingboard",
+      "name": "Cutting Board",
+      "category": "food",
+      "file": "CuttingBoard"
+    },
+    {
+      "id": "dessertshowcase",
+      "name": "Dessert Showcase",
+      "category": "food",
+      "file": "DessertShowcase"
+    },
+    {
+      "id": "fruitbasket",
+      "name": "Fruit Basket",
+      "category": "food",
+      "file": "FruitBasket"
+    },
+    {
+      "id": "ingredientsflatlay",
+      "name": "Ingredients Flat Lay",
+      "category": "food",
+      "file": "IngredientsFlatLay"
+    },
+    {
+      "id": "kitchencounterfood",
+      "name": "Kitchen Counter Food",
+      "category": "food",
+      "file": "KitchenCounterFood"
+    },
+    {
+      "id": "recipecard",
+      "name": "Recipe Card",
+      "category": "food",
+      "file": "RecipeCard"
+    },
+    {
+      "id": "rustictable",
+      "name": "Rustic Table",
+      "category": "food",
+      "file": "RusticTable"
+    },
+    {
+      "id": "styleddish",
+      "name": "Styled Dish",
+      "category": "food",
+      "file": "StyledDish"
+    }
+  ]
+}
