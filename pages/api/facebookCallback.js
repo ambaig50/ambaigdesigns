@@ -1,15 +1,21 @@
 // pages/api/facebookCallback.js
 export default async function handler(req, res) {
   const { code } = req.query;
-  const clientId = process.env.META_CLIENT_ID;
-  const clientSecret = process.env.META_CLIENT_SECRET;
-  const redirectUri = "http://localhost:3000/api/facebookCallback";
 
-  const tokenRes = await fetch(`https://graph.facebook.com/v18.0/oauth/access_token?client_id=${clientId}&redirect_uri=${redirectUri}&client_secret=${clientSecret}&code=${code}`);
-  const tokenData = await tokenRes.json();
+  // Step 1: Exchange code for short-lived token
+  const tokenRes = await fetch(
+    `https://graph.facebook.com/v18.0/oauth/access_token?client_id=${process.env.META_CLIENT_ID}&redirect_uri=${process.env.REDIRECT_URI}&client_secret=${process.env.META_CLIENT_SECRET}&code=${code}`
+  );
+  const shortToken = await tokenRes.json();
 
-  // Save token securely (DB or server session)
-  console.log("Facebook Access Token:", tokenData.access_token);
+  // Step 2: Exchange short-lived token for long-lived token
+  const longRes = await fetch(
+    `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.META_CLIENT_ID}&client_secret=${process.env.META_CLIENT_SECRET}&fb_exchange_token=${shortToken.access_token}`
+  );
+  const longToken = await longRes.json();
 
-  res.send("Facebook connected successfully!");
+  // Save longToken.access_token securely (DB or env for testing)
+  console.log("Long-lived Meta token:", longToken.access_token);
+
+  res.send("Facebook/Instagram/Threads connected with long-lived token!");
 }
