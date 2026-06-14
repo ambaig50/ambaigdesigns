@@ -249,17 +249,40 @@ export default function Home() {
   };
 
   const addBg = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    loadFile(file, src => setBg({ src, ox: 50, oy: 50 }));
-    e.target.value = "";
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target.result;
+      if (src) {
+        setBg({ src, ox: 50, oy: 50 });
+      } else {
+        setToast("⚠️ Could not load image. Try a different file.");
+        setTimeout(() => setToast(""), 3000);
+      }
+      e.target.value = "";
+    };
+    reader.onerror = () => {
+      setToast("⚠️ Image read failed. Try again.");
+      setTimeout(() => setToast(""), 3000);
+      e.target.value = "";
+    };
+    reader.readAsDataURL(file);
   };
 
   const addImage = (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    loadFile(file, src => {
-      setImages(prev => [...prev, { id: Date.now(), src, x: 60, y: 60, w: 200, h: 200, ox: 50, oy: 50 }]);
-    });
-    e.target.value = "";
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const src = ev.target.result;
+      if (src) {
+        setImages(prev => [...prev, { id: Date.now(), src, x: 60, y: 60, w: 200, h: 200, ox: 50, oy: 50 }]);
+      }
+      e.target.value = "";
+    };
+    reader.onerror = () => { e.target.value = ""; };
+    reader.readAsDataURL(file);
   };
 
   const addTextBox = () => {
@@ -438,11 +461,30 @@ export default function Home() {
           <div className="card">
             <p className="plabel">Background Photo</p>
             <input type="file" accept="image/*" ref={bgFileRef} style={{ display: "none" }} onChange={addBg} />
-            {bg
-              ? <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", color: "var(--danger)", borderColor: "var(--danger)" }} onClick={() => setBg(null)}>🗑 Remove Background</button>
-              : <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => bgFileRef.current?.click()}>🖼 Set Background Photo</button>
-            }
-            {bg && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>Drag on canvas to reposition.</p>}
+            {bg ? (
+              <div>
+                {/* Thumbnail preview */}
+                <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 8, border: "1px solid var(--border)" }}>
+                  <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={() => bgFileRef.current?.click()}>
+                    🔄 Change
+                  </button>
+                  <button
+                    onClick={() => setBg(null)}
+                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600 }}
+                  >
+                    🗑 Remove
+                  </button>
+                </div>
+                <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 6 }}>Drag on canvas to pan/reposition.</p>
+              </div>
+            ) : (
+              <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => bgFileRef.current?.click()}>
+                🖼 Set Background Photo
+              </button>
+            )}
           </div>
 
           {/* Overlay image */}
