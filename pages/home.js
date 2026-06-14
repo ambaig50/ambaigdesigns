@@ -323,9 +323,15 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
-  const addTextBox = () => {
+  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold) => {
     const id = Date.now();
-    setTextBoxes(prev => [...prev, { id, text: "Tap to edit", x: 60, y: sz.h / 2, w: sz.w - 120, color: textColor, fontSize, bold: textBold, align: "center" }]);
+    setTextBoxes(prev => [...prev, {
+      id, text,
+      x: 30,
+      y: Math.max(30, sz.h / 2 - 60),
+      w: sz.w - 60,
+      color, fontSize: size, bold, align: "center",
+    }]);
     setActiveEl({ type: "text", id });
   };
 
@@ -431,7 +437,13 @@ export default function Home() {
   };
 
   const goToCaptions = () => {
-    router.push({ pathname: "/captions", query: { title, description, category: selected.category, id: selected.id } });
+    // Use first text box content as title for caption generation
+    const firstText = textBoxes[0]?.text || "";
+    const secondText = textBoxes[1]?.text || "";
+    router.push({
+      pathname: "/captions",
+      query: { title: firstText, description: secondText, category: selected.category, id: selected.id }
+    });
   };
 
   const goToPost = () => {
@@ -481,21 +493,49 @@ export default function Home() {
                   {Object.keys(registry).map(cat => <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
                 </select>
               </div>
-              <div style={{ marginBottom: 7 }}>
+              <div style={{ marginBottom: 4 }}>
                 <label className="field-label">Style</label>
                 <select value={selected.id} onChange={e => setSelected(s => ({ ...s, id: e.target.value }))}>
                   {registry[selected.category].map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <div style={{ marginBottom: 7 }}>
-                <label className="field-label">Title</label>
-                <input type="text" placeholder="Pin title…" value={title} onChange={e => setTitle(e.target.value)} />
-              </div>
-              <div>
-                <label className="field-label">Description</label>
-                <textarea placeholder="Description…" value={description} onChange={e => setDesc(e.target.value)} style={{ minHeight: 56 }} />
-              </div>
             </>}
+          </div>
+
+          {/* Text on canvas */}
+          <div className="card">
+            <p className="plabel">Text on Canvas</p>
+            <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 }}>
+              Text is placed as a moveable layer — drag it anywhere on canvas.
+            </p>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label className="field-label">Color</label>
+                <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
+                  style={{ width: "100%", height: 34, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="field-label">Size</label>
+                <input type="number" value={fontSize} min={10} max={80} onChange={e => setFontSize(Number(e.target.value))} />
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              <input type="checkbox" checked={textBold} onChange={e => setTextBold(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Bold
+            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
+                onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>
+                + Add Title
+              </button>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
+                onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false)}>
+                + Add Description
+              </button>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
+                onClick={() => addTextBox("Your text here", textColor, fontSize, textBold)}>
+                + Add Text Box
+              </button>
+            </div>
           </div>
 
           {/* Background */}
@@ -550,25 +590,6 @@ export default function Home() {
             {images.length > 0 && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>{images.length} image(s) on canvas</p>}
           </div>
 
-          {/* Text */}
-          <div className="card">
-            <p className="plabel">Text Layer</p>
-            <div style={{ display: "flex", gap: 6, marginBottom: 7 }}>
-              <div style={{ flex: 1 }}>
-                <label className="field-label">Color</label>
-                <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} style={{ width: "100%", height: 34, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label className="field-label">Size</label>
-                <input type="number" value={fontSize} min={10} max={80} onChange={e => setFontSize(Number(e.target.value))} />
-              </div>
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              <input type="checkbox" checked={textBold} onChange={e => setTextBold(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Bold
-            </label>
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={addTextBox}>+ Add Text Box</button>
-          </div>
-
           {/* Actions */}
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>
             {saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}
@@ -605,16 +626,14 @@ export default function Home() {
                 />
               )}
 
-              {/* 2. Template — wrapped to strip white background */}
+              {/* 2. Template — mix-blend-mode strips white bg when photo is set */}
               {showTemplate && TemplateComponent && (
                 <div style={{
                   position: "absolute", inset: 0, zIndex: 5,
                   pointerEvents: "none",
-                  // Force template's own white bg to be transparent
-                  // by using mix-blend-mode multiply (white becomes invisible)
                   mixBlendMode: bg ? "multiply" : "normal",
                 }}>
-                  <TemplateComponent title={title} description={description} />
+                  <TemplateComponent title="" description="" />
                 </div>
               )}
 
