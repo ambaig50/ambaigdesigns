@@ -518,19 +518,20 @@ export default function Home() {
                   style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }}
                 />
 
-                {/* Change button only */}
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }}
-                    onClick={() => bgFileRef.current?.click()}>
-                    🖼 Change Photo
-                  </button>
-                  <button
-                    onClick={() => { setBg(null); setBgOpacity(1); }}
-                    style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}
-                  >
-                    🗑
-                  </button>
-                </div>
+                {/* Single button - Change Photo (also acts as remove via new selection) */}
+                <button
+                  className="btn btn-ghost"
+                  style={{ width: "100%", justifyContent: "center", fontSize: "0.78rem" }}
+                  onClick={() => bgFileRef.current?.click()}
+                >
+                  🖼 Change Photo
+                </button>
+                <button
+                  onClick={() => { setBg(null); setBgOpacity(1); }}
+                  style={{ width: "100%", marginTop: 6, padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}
+                >
+                  Remove background
+                </button>
                 <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 6 }}>Drag image on canvas to pan.</p>
               </div>
             ) : (
@@ -604,9 +605,15 @@ export default function Home() {
                 />
               )}
 
-              {/* 2. Template */}
+              {/* 2. Template — wrapped to strip white background */}
               {showTemplate && TemplateComponent && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 5, pointerEvents: "none" }}>
+                <div style={{
+                  position: "absolute", inset: 0, zIndex: 5,
+                  pointerEvents: "none",
+                  // Force template's own white bg to be transparent
+                  // by using mix-blend-mode multiply (white becomes invisible)
+                  mixBlendMode: bg ? "multiply" : "normal",
+                }}>
                   <TemplateComponent title={title} description={description} />
                 </div>
               )}
