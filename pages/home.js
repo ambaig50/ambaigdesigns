@@ -3,166 +3,208 @@ import { getTemplateRegistry } from "../utils/loadTemplates";
 import { getTemplateComponent } from "../utils/templateComponents";
 import { useRouter } from "next/router";
 
-// ── drag/resize helpers ──────────────────────────────────────────
-function useDraggable(pos, setPos, canvasRef) {
-  const dragging = useRef(false);
-  const offset = useRef({ x: 0, y: 0 });
-
-  const onMouseDown = (e) => {
-    e.preventDefault();
-    dragging.current = true;
-    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
-  const onTouchStart = (e) => {
-    dragging.current = true;
-    const t = e.touches[0];
-    offset.current = { x: t.clientX - pos.x, y: t.clientY - pos.y };
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onMouseUp);
-  };
-
-  const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
-
-  const onMouseMove = useCallback((e) => {
-    if (!dragging.current) return;
-    const canvas = canvasRef.current?.getBoundingClientRect();
-    if (!canvas) return;
-    setPos(p => ({
-      ...p,
-      x: clamp(e.clientX - offset.current.x, 0, canvas.width - (p.w || 100)),
-      y: clamp(e.clientY - canvas.top - offset.current.y, 0, canvas.height - (p.h || 100)),
-    }));
-  }, [setPos, canvasRef]);
-
-  const onTouchMove = useCallback((e) => {
-    e.preventDefault();
-    if (!dragging.current) return;
-    const t = e.touches[0];
-    const canvas = canvasRef.current?.getBoundingClientRect();
-    if (!canvas) return;
-    setPos(p => ({
-      ...p,
-      x: clamp(t.clientX - offset.current.x, 0, canvas.width - (p.w || 100)),
-      y: clamp(t.clientY - canvas.top - offset.current.y, 0, canvas.height - (p.h || 100)),
-    }));
-  }, [setPos, canvasRef]);
-
-  const onMouseUp = useCallback(() => {
-    dragging.current = false;
-    window.removeEventListener("mousemove", onMouseMove);
-    window.removeEventListener("mouseup", onMouseUp);
-    window.removeEventListener("touchmove", onTouchMove);
-    window.removeEventListener("touchend", onMouseUp);
-  }, [onMouseMove, onTouchMove]);
-
-  return { onMouseDown, onTouchStart };
-}
-
-// ── CanvasImage component ────────────────────────────────────────
+// ── Draggable + Resizable + Crop image layer ─────────────────────
 function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect }) {
-  const [pos, setPos] = useState({ x: img.x, y: img.y, w: img.w, h: img.h });
-  const { onMouseDown, onTouchStart } = useDraggable(pos, setPos, canvasRef);
-  const resizing = useRef(false);
-  const resizeStart = useRef({});
+  const dragOffset = useRef(null);
+  const resizeStart = useRef(null);
+  const cropStart = useRef(null);
+  const [mode, setMode] = useState("move"); // move | crop
 
-  useEffect(() => { onUpdate({ ...img, ...pos }); }, [pos]);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  const startResize = (e) => {
+  const getCanvasRect = () => canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 600, height: 900 };
+
+  // ── Drag ──
+  const startDrag = (e) => {
+    if (mode === "crop") return;
+    e.preventDefault();
     e.stopPropagation();
-    resizing.current = true;
-    resizeStart.current = { x: e.clientX, y: e.clientY, w: pos.w, h: pos.h };
-    const onMove = (ev) => {
-      if (!resizing.current) return;
-      const dx = ev.clientX - resizeStart.current.x;
-      const dy = ev.clientY - resizeStart.current.y;
-      setPos(p => ({ ...p, w: Math.max(40, resizeStart.current.w + dx), h: Math.max(40, resizeStart.current.h + dy) }));
+    onSelect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragOffset.current = { dx: clientX - img.x, dy: clientY - img.y };
+
+    const move = (ev) => {
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const rect = getCanvasRect();
+      onUpdate({
+        x: clamp(cx - dragOffset.current.dx, 0, rect.width - img.w),
+        y: clamp(cy - dragOffset.current.dy, 0, rect.height - img.h),
+      });
     };
-    const onUp = () => {
-      resizing.current = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+    const up = () => {
+      dragOffset.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
     };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
   };
+
+  // ── Resize ──
+  const startResize = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    resizeStart.current = { cx, cy, w: img.w, h: img.h };
+
+    const move = (ev) => {
+      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      onUpdate({
+        w: Math.max(50, resizeStart.current.w + (mx - resizeStart.current.cx)),
+        h: Math.max(50, resizeStart.current.h + (my - resizeStart.current.cy)),
+      });
+    };
+    const up = () => {
+      resizeStart.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
+  };
+
+  // ── Crop (adjusts objectPosition offset) ──
+  const startCrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    cropStart.current = { cx, cy, ox: img.ox || 50, oy: img.oy || 50 };
+
+    const move = (ev) => {
+      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      onUpdate({
+        ox: clamp((cropStart.current.ox) - (mx - cropStart.current.cx) * 0.3, 0, 100),
+        oy: clamp((cropStart.current.oy) - (my - cropStart.current.cy) * 0.3, 0, 100),
+      });
+    };
+    const up = () => {
+      cropStart.current = null;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
+  };
+
+  const ox = img.ox ?? 50;
+  const oy = img.oy ?? 50;
 
   return (
     <div
-      onMouseDown={(e) => { onSelect(); onMouseDown(e); }}
-      onTouchStart={(e) => { onSelect(); onTouchStart(e); }}
       style={{
         position: "absolute",
-        left: pos.x, top: pos.y,
-        width: pos.w, height: pos.h,
-        cursor: "move",
-        outline: selected ? "2px solid #c084fc" : "none",
+        left: img.x, top: img.y,
+        width: img.w, height: img.h,
+        cursor: mode === "crop" ? "crosshair" : "move",
+        outline: selected ? "2px solid #c084fc" : "2px solid transparent",
+        outlineOffset: 1,
         userSelect: "none",
         touchAction: "none",
+        overflow: "hidden",
+        borderRadius: 4,
       }}
+      onMouseDown={mode === "crop" ? startCrop : startDrag}
+      onTouchStart={mode === "crop" ? startCrop : startDrag}
     >
       <img
         src={img.src}
         alt=""
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 4 }}
         draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: `${ox}% ${oy}%`,
+          display: "block",
+          pointerEvents: "none",
+        }}
       />
+
       {selected && (
         <>
+          {/* Delete */}
           <button
-            onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -10, right: -10, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: -10, left: -10, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 13, cursor: "pointer", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}
           >×</button>
+
+          {/* Mode toggle */}
+          <button
+            onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }}
+            title={mode === "move" ? "Switch to crop/pan mode" : "Switch to move mode"}
+            style={{ position: "absolute", top: -10, right: -10, width: 22, height: 22, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "none", color: "white", fontSize: 11, cursor: "pointer", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >{mode === "move" ? "✂️" : "↔"}</button>
+
+          {/* Resize handle — bottom right */}
           <div
             onMouseDown={startResize}
-            style={{ position: "absolute", bottom: -6, right: -6, width: 16, height: 16, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize" }}
+            onTouchStart={startResize}
+            style={{ position: "absolute", bottom: -6, right: -6, width: 18, height: 18, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize", zIndex: 10 }}
           />
+
+          {/* Mode hint */}
+          <div style={{ position: "absolute", bottom: 4, left: 4, background: "rgba(0,0,0,0.55)", color: "white", fontSize: 9, padding: "2px 5px", borderRadius: 3, pointerEvents: "none" }}>
+            {mode === "move" ? "drag to move" : "drag to pan/crop"}
+          </div>
         </>
       )}
     </div>
   );
 }
 
-// ── Main Page ────────────────────────────────────────────────────
+// ── Main page ────────────────────────────────────────────────────
 export default function Home() {
-  const [title, setTitle]       = useState("");
-  const [description, setDesc]  = useState("");
-  const [selected, setSelected] = useState({ category: "minimalist", id: "boldcentered" });
-  const [images, setImages]     = useState([]);
+  const [title, setTitle]         = useState("");
+  const [description, setDesc]    = useState("");
+  const [selected, setSelected]   = useState({ category: "minimalist", id: "boldcentered" });
+  const [images, setImages]       = useState([]);
   const [activeImg, setActiveImg] = useState(null);
-  const [canvasSize, setCanvasSize] = useState("portrait"); // portrait | square | landscape
-  const canvasRef  = useRef(null);
-  const fileRef    = useRef(null);
-  const router     = useRouter();
+  const [canvasSize, setCanvasSize] = useState("portrait");
+  const canvasRef = useRef(null);
+  const fileRef   = useRef(null);
+  const router    = useRouter();
 
   const registry = getTemplateRegistry();
   const TemplateComponent = getTemplateComponent(selected.category, selected.id);
 
   const SIZES = {
-    portrait:  { w: 600, h: 900,  label: "Pinterest (2:3)" },
-    square:    { w: 600, h: 600,  label: "Instagram (1:1)" },
-    landscape: { w: 800, h: 450,  label: "Facebook (16:9)" },
+    portrait:  { w: 600, h: 900, label: "Pinterest 2:3" },
+    square:    { w: 600, h: 600, label: "Instagram 1:1" },
+    landscape: { w: 800, h: 450, label: "Facebook 16:9" },
   };
+  const sz = SIZES[canvasSize];
 
   const addImage = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      setImages(prev => [...prev, {
-        id: Date.now(),
-        src: ev.target.result,
-        x: 40, y: 40, w: 200, h: 200,
-      }]);
+      setImages(prev => [...prev, { id: Date.now(), src: ev.target.result, x: 60, y: 60, w: 220, h: 220, ox: 50, oy: 50 }]);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const updateImage = (id, data) => {
-    setImages(prev => prev.map(img => img.id === id ? { ...img, ...data } : img));
+  const updateImage = (id, patch) => {
+    setImages(prev => prev.map(img => img.id === id ? { ...img, ...patch } : img));
   };
 
   const removeImage = (id) => {
@@ -170,176 +212,157 @@ export default function Home() {
     setActiveImg(null);
   };
 
-  const saveDesign = () => {
-    const data = { title, description, template: selected, images, canvasSize };
-    const saved = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
-    saved.push({ ...data, savedAt: new Date().toISOString(), id: Date.now() });
-    localStorage.setItem("ambaig_designs", JSON.stringify(saved));
-    // Show toast
+  const showToast = (msg) => {
     const t = document.createElement("div");
     t.className = "toast";
-    t.innerHTML = "✅ Design saved locally";
+    t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2500);
   };
 
-  const goToCaptions = () => {
-    router.push({
-      pathname: "/captions",
-      query: { title, description, category: selected.category, id: selected.id }
-    });
+  const saveDesign = () => {
+    const data = { title, description, template: selected, canvasSize, savedAt: new Date().toISOString(), id: Date.now() };
+    const saved = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
+    saved.unshift(data);
+    localStorage.setItem("ambaig_designs", JSON.stringify(saved.slice(0, 20)));
+    showToast("✅ Design saved locally");
   };
 
-  const sz = SIZES[canvasSize];
+  const goToCaptions = () => {
+    router.push({ pathname: "/captions", query: { title, description, category: selected.category, id: selected.id } });
+  };
+
+  // Deselect on canvas background click
+  const onCanvasClick = (e) => {
+    if (e.target === canvasRef.current || e.target.tagName === "DIV" && e.target === canvasRef.current?.firstChild) {
+      setActiveImg(null);
+    }
+  };
 
   return (
     <div>
       <div className="page-header">
         <h1>Design Studio</h1>
-        <p>Build your pin or mockup, then generate AI captions and post.</p>
+        <p>Pick a template, add images, then generate captions and post.</p>
       </div>
 
-      <div style={{ display: "flex", gap: 20, padding: "0 24px 32px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 20, padding: "0 20px 40px", flexWrap: "wrap", alignItems: "flex-start" }}>
 
         {/* ── Left panel ── */}
-        <div style={{ width: 240, minWidth: 220, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ width: 230, minWidth: 200, display: "flex", flexDirection: "column", gap: 14 }}>
 
-          {/* Template picker */}
           <div className="card">
-            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Template</p>
-            <div style={{ marginBottom: 10 }}>
+            <p className="panel-label">Canvas Size</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {Object.entries(SIZES).map(([key, val]) => (
+                <button key={key} onClick={() => setCanvasSize(key)} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "7px 10px", borderRadius: 8,
+                  border: canvasSize === key ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: canvasSize === key ? "var(--accent-glow)" : "transparent",
+                  color: canvasSize === key ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer", fontSize: "0.78rem", fontWeight: 500,
+                }}>
+                  <span style={{ textTransform: "capitalize" }}>{key}</span>
+                  <span style={{ opacity: 0.7 }}>{val.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <p className="panel-label">Template</p>
+            <div style={{ marginBottom: 8 }}>
               <label className="field-label">Category</label>
-              <select
-                value={selected.category}
-                onChange={(e) => setSelected({ category: e.target.value, id: registry[e.target.value][0].id })}
-              >
-                {Object.keys(registry).map(cat => (
-                  <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                ))}
+              <select value={selected.category} onChange={e => setSelected({ category: e.target.value, id: registry[e.target.value][0].id })}>
+                {Object.keys(registry).map(cat => <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
               </select>
             </div>
             <div>
               <label className="field-label">Style</label>
-              <select value={selected.id} onChange={(e) => setSelected(s => ({ ...s, id: e.target.value }))}>
-                {registry[selected.category].map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
+              <select value={selected.id} onChange={e => setSelected(s => ({ ...s, id: e.target.value }))}>
+                {registry[selected.category].map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
           </div>
 
-          {/* Canvas size */}
           <div className="card">
-            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Canvas Size</p>
-            {Object.entries(SIZES).map(([key, val]) => (
-              <button
-                key={key}
-                onClick={() => setCanvasSize(key)}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  width: "100%", padding: "8px 12px", borderRadius: 8, marginBottom: 6,
-                  border: canvasSize === key ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  background: canvasSize === key ? "var(--accent-glow)" : "transparent",
-                  color: canvasSize === key ? "var(--accent)" : "var(--text-muted)",
-                  cursor: "pointer", fontSize: "0.8rem", fontWeight: 500,
-                }}
-              >
-                <span style={{ textTransform: "capitalize" }}>{key}</span>
-                <span style={{ fontSize: "0.7rem", opacity: 0.7 }}>{val.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Content */}
-          <div className="card">
-            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Content</p>
-            <div style={{ marginBottom: 10 }}>
+            <p className="panel-label">Content</p>
+            <div style={{ marginBottom: 8 }}>
               <label className="field-label">Title</label>
               <input type="text" placeholder="Your pin title…" value={title} onChange={e => setTitle(e.target.value)} />
             </div>
             <div>
               <label className="field-label">Description</label>
-              <textarea placeholder="What is this about?" value={description} onChange={e => setDesc(e.target.value)} style={{ minHeight: 80 }} />
+              <textarea placeholder="What is this about?" value={description} onChange={e => setDesc(e.target.value)} style={{ minHeight: 72 }} />
             </div>
           </div>
 
-          {/* Image uploads */}
           <div className="card">
-            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Images</p>
+            <p className="panel-label">Images</p>
             <input type="file" accept="image/*" ref={fileRef} style={{ display: "none" }} onChange={addImage} />
             <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => fileRef.current?.click()}>
-              + Add Image
+              + Upload Image
             </button>
             {images.length > 0 && (
-              <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: 8 }}>
-                {images.length} image{images.length > 1 ? "s" : ""} on canvas. Click to select, drag to move, resize via corner.
+              <p style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: 8, lineHeight: 1.5 }}>
+                {images.length} image{images.length > 1 ? "s" : ""}. Click to select → drag to move → ✂️ to pan/crop → corner to resize.
               </p>
             )}
           </div>
 
-          {/* Actions */}
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={saveDesign}>
-            💾 Save Design
-          </button>
-          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>
-            ✨ Generate Captions →
-          </button>
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={saveDesign}>💾 Save Design</button>
+          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>✨ Generate Captions →</button>
         </div>
 
-        {/* ── Canvas area ── */}
-        <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              Canvas — {sz.w}×{sz.h}px
-            </p>
-            {activeImg !== null && (
-              <button className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: "0.75rem" }} onClick={() => setActiveImg(null)}>
-                Deselect
-              </button>
-            )}
-          </div>
-
-          {/* Responsive canvas wrapper */}
-          <div style={{ overflow: "auto", maxWidth: "100%" }}>
+        {/* ── Canvas ── */}
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginBottom: 10 }}>
+            Canvas — {sz.w}×{sz.h}px · Click an uploaded image to select it
+          </p>
+          <div style={{ overflowX: "auto", overflowY: "auto", maxWidth: "100%", maxHeight: "80vh" }}>
             <div
               ref={canvasRef}
-              onClick={(e) => { if (e.target === canvasRef.current) setActiveImg(null); }}
-              style={{
-                position: "relative",
-                width: sz.w,
-                height: sz.h,
-                overflow: "hidden",
-                borderRadius: 12,
-                border: "1px solid var(--border)",
-                background: "#fff",
-              }}
+              onClick={onCanvasClick}
+              style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 12, border: "1px solid var(--border)", flexShrink: 0 }}
             >
-              {/* Template layer */}
-              {TemplateComponent
-                ? <TemplateComponent title={title} description={description} />
-                : <div style={{ padding: 20, color: "#999" }}>Template not found</div>
-              }
+              {/* Template background */}
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                {TemplateComponent
+                  ? <TemplateComponent title={title} description={description} />
+                  : <div style={{ padding: 20, color: "#999" }}>Template not found</div>}
+              </div>
 
-              {/* Images layer */}
-              {images.map((img) => (
+              {/* Uploaded images (draggable) */}
+              {images.map(img => (
                 <CanvasImage
                   key={img.id}
                   img={img}
                   canvasRef={canvasRef}
                   selected={activeImg === img.id}
                   onSelect={() => setActiveImg(img.id)}
-                  onUpdate={(data) => updateImage(img.id, data)}
+                  onUpdate={(patch) => updateImage(img.id, patch)}
                   onRemove={() => removeImage(img.id)}
                 />
               ))}
             </div>
           </div>
-
-          <p style={{ marginTop: 10, fontSize: "0.72rem", color: "var(--text-dim)" }}>
-            💡 Tip: drag images anywhere, use the purple handle to resize, × to remove.
+          <p style={{ marginTop: 8, fontSize: "0.7rem", color: "var(--text-dim)" }}>
+            💡 Templates use their own layout. Uploaded images sit on top — fully moveable, resizable, and croppable.
           </p>
         </div>
       </div>
+
+      <style jsx>{`
+        .panel-label {
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 10px;
+        }
+      `}</style>
     </div>
   );
 }
