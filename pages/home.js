@@ -146,30 +146,67 @@ function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect })
 }
 
 // ── Background image ─────────────────────────────────────────────
-function BgImage({ src, ox, oy, onPan, onRemove }) {
+function BgImage({ src, ox, oy, opacity, onPan }) {
   const startPan = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
     const sox = ox, soy = oy;
     const move = (ev) => {
+      ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onPan(Math.max(0, Math.min(sox - (mx - cx) * 0.2, 100)), Math.max(0, Math.min(soy - (my - cy) * 0.2, 100)));
+      onPan(
+        Math.max(0, Math.min(sox - (mx - cx) * 0.2, 100)),
+        Math.max(0, Math.min(soy - (my - cy) * 0.2, 100))
+      );
     };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
-    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
   };
 
+  if (!src) return null;
+
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 1, cursor: "crosshair", overflow: "hidden" }}
-      onMouseDown={startPan} onTouchStart={startPan}>
-      <img src={src} alt="bg" draggable={false}
-        style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${ox}% ${oy}%`, display: "block", pointerEvents: "none" }} />
-      <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-        style={{ position: "absolute", top: 8, right: 8, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 14, cursor: "pointer", zIndex: 5, fontWeight: 700 }}>×</button>
-      <div style={{ position: "absolute", bottom: 6, left: 6, background: "rgba(0,0,0,0.5)", color: "white", fontSize: 9, padding: "2px 6px", borderRadius: 3, pointerEvents: "none" }}>drag to pan</div>
+    <div
+      onMouseDown={startPan}
+      onTouchStart={startPan}
+      style={{
+        position: "absolute", inset: 0, zIndex: 1,
+        cursor: "grab", overflow: "hidden",
+        opacity: opacity ?? 1,
+      }}
+    >
+      <img
+        src={src}
+        alt="background"
+        draggable={false}
+        style={{
+          width: "100%", height: "100%",
+          objectFit: "cover",
+          objectPosition: `${ox ?? 50}% ${oy ?? 50}%`,
+          display: "block",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
+      <div style={{
+        position: "absolute", bottom: 6, left: 6,
+        background: "rgba(0,0,0,0.5)", color: "white",
+        fontSize: 9, padding: "2px 6px", borderRadius: 3,
+        pointerEvents: "none",
+      }}>
+        drag to pan
+      </div>
     </div>
   );
 }
@@ -194,6 +231,7 @@ export default function Home() {
   const [showTemplate, setShowTemplate] = useState(true);
   const [canvasSize, setCanvasSize] = useState("portrait");
   const [bg, setBg]                 = useState(null);
+  const [bgOpacity, setBgOpacity]   = useState(1);
   const [images, setImages]         = useState([]);
   const [textBoxes, setTextBoxes]   = useState([]);
   const [activeEl, setActiveEl]     = useState(null);
@@ -313,12 +351,15 @@ export default function Home() {
         await new Promise((res) => {
           const img = new window.Image();
           img.onload = () => {
-            // cover fill
+            ctx.save();
+            ctx.globalAlpha = bgOpacity ?? 1;
             const scale = Math.max(sz.w / img.width, sz.h / img.height);
             const dw = img.width * scale, dh = img.height * scale;
             const dx = (sz.w - dw) * (bg.ox / 100);
             const dy = (sz.h - dh) * (bg.oy / 100);
             ctx.drawImage(img, dx, dy, dw, dh);
+            ctx.globalAlpha = 1;
+            ctx.restore();
             res();
           };
           img.onerror = res;
@@ -463,25 +504,38 @@ export default function Home() {
             <input type="file" accept="image/*" ref={bgFileRef} style={{ display: "none" }} onChange={addBg} />
             {bg ? (
               <div>
-                {/* Thumbnail preview */}
-                <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 8, border: "1px solid var(--border)" }}>
-                  <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {/* Thumbnail */}
+                <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 10, border: "1px solid var(--border)" }}>
+                  <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: bgOpacity }} />
                 </div>
+
+                {/* Opacity slider */}
+                <label className="field-label">Opacity — {Math.round(bgOpacity * 100)}%</label>
+                <input
+                  type="range" min="0.1" max="1" step="0.05"
+                  value={bgOpacity}
+                  onChange={e => setBgOpacity(Number(e.target.value))}
+                  style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }}
+                />
+
+                {/* Change button only */}
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={() => bgFileRef.current?.click()}>
-                    🔄 Change
+                  <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }}
+                    onClick={() => bgFileRef.current?.click()}>
+                    🖼 Change Photo
                   </button>
                   <button
-                    onClick={() => setBg(null)}
-                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.78rem", fontWeight: 600 }}
+                    onClick={() => { setBg(null); setBgOpacity(1); }}
+                    style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}
                   >
-                    🗑 Remove
+                    🗑
                   </button>
                 </div>
-                <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 6 }}>Drag on canvas to pan/reposition.</p>
+                <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 6 }}>Drag image on canvas to pan.</p>
               </div>
             ) : (
-              <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => bgFileRef.current?.click()}>
+              <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }}
+                onClick={() => bgFileRef.current?.click()}>
                 🖼 Set Background Photo
               </button>
             )}
@@ -541,7 +595,14 @@ export default function Home() {
               style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff", flexShrink: 0 }}
             >
               {/* 1. Background */}
-              {bg && <BgImage src={bg.src} ox={bg.ox} oy={bg.oy} onPan={(ox, oy) => setBg(b => ({ ...b, ox, oy }))} onRemove={() => setBg(null)} />}
+              {bg && bg.src && (
+                <BgImage
+                  src={bg.src}
+                  ox={bg.ox} oy={bg.oy}
+                  opacity={bgOpacity}
+                  onPan={(ox, oy) => setBg(b => ({ ...b, ox, oy }))}
+                />
+              )}
 
               {/* 2. Template */}
               {showTemplate && TemplateComponent && (
