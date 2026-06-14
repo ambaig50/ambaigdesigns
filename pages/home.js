@@ -202,7 +202,6 @@ export default function Home() {
   const [textBold, setTextBold]     = useState(false);
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState("");
-  const [savedImageUrl, setSavedImageUrl] = useState(null);
   const canvasRef  = useRef(null);
   const imgFileRef = useRef(null);
   const bgFileRef  = useRef(null);
@@ -214,29 +213,33 @@ export default function Home() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
-  // ── Load pending caption text layers from captions page ──
+  // ── Load pending caption text layers when page mounts ──
   useEffect(() => {
-    const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
-    if (pending.length > 0) {
-      const canvasH = SIZES[canvasSize].h;
-      const canvasW = SIZES[canvasSize].w;
-      setTextBoxes(prev => [
-        ...prev,
-        ...pending.map((p, i) => ({
-          id: Date.now() + i,
-          text: p.text,
-          x: 30,
-          y: Math.max(60, canvasH - 220 + i * 80),
-          w: canvasW - 60,
-          color: "#ffffff",
-          fontSize: 15,
-          bold: false,
-          align: "center",
-        })),
-      ]);
-      localStorage.removeItem("ambaig_pending_text");
-      showToast("✅ Caption added to canvas — drag to reposition");
-    }
+    const timer = setTimeout(() => {
+      try {
+        const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
+        if (pending.length > 0) {
+          setTextBoxes(prev => [
+            ...prev,
+            ...pending.map((p, i) => ({
+              id: Date.now() + i,
+              text: p.text,
+              x: 30,
+              y: Math.min(800, 480 + i * 90),
+              w: 540,
+              color: "#ffffff",
+              fontSize: 15,
+              bold: false,
+              align: "center",
+            })),
+          ]);
+          localStorage.removeItem("ambaig_pending_text");
+          setToast("✅ Caption placed on canvas — drag to reposition");
+          setTimeout(() => setToast(""), 3500);
+        }
+      } catch (e) {}
+    }, 250);
+    return () => clearTimeout(timer);
   }, []);
 
   const loadFile = (file, cb) => {
@@ -265,27 +268,85 @@ export default function Home() {
     setActiveEl({ type: "text", id });
   };
 
-  // ── Download PNG — works on mobile via <a download> ──
+  // ── Download PNG using native Canvas API (works on mobile) ──
   const downloadPNG = async () => {
     setSaving(true);
-    setActiveEl(null); // deselect so handles don't appear in export
-    await new Promise(r => setTimeout(r, 100)); // let deselect render
+    setActiveEl(null);
+    await new Promise(r => setTimeout(r, 150));
 
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(canvasRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: 2,
-        width: sz.w,
-        height: sz.h,
-        backgroundColor: "#ffffff",
-        logging: false,
-      });
+      const canvas = document.createElement("canvas");
+      canvas.width  = sz.w * 2;  // 2x for retina
+      canvas.height = sz.h * 2;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(2, 2);
+
+      // 1. White background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, sz.w, sz.h);
+
+      // 2. Draw background image if set
+      if (bg?.src) {
+        await new Promise((res) => {
+          const img = new window.Image();
+          img.onload = () => {
+            // cover fill
+            const scale = Math.max(sz.w / img.width, sz.h / img.height);
+            const dw = img.width * scale, dh = img.height * scale;
+            const dx = (sz.w - dw) * (bg.ox / 100);
+            const dy = (sz.h - dh) * (bg.oy / 100);
+            ctx.drawImage(img, dx, dy, dw, dh);
+            res();
+          };
+          img.onerror = res;
+          img.src = bg.src;
+        });
+      }
+
+      // 3. Draw overlay images
+      for (const imgData of images) {
+        await new Promise((res) => {
+          const img = new window.Image();
+          img.onload = () => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(imgData.x, imgData.y, imgData.w, imgData.h);
+            ctx.clip();
+            const scale = Math.max(imgData.w / img.width, imgData.h / img.height);
+            const dw = img.width * scale, dh = img.height * scale;
+            const dx = imgData.x + (imgData.w - dw) * ((imgData.ox ?? 50) / 100);
+            const dy = imgData.y + (imgData.h - dh) * ((imgData.oy ?? 50) / 100);
+            ctx.drawImage(img, dx, dy, dw, dh);
+            ctx.restore();
+            res();
+          };
+          img.onerror = res;
+          img.src = imgData.src;
+        });
+      }
+
+      // 4. Draw text boxes
+      for (const box of textBoxes) {
+        ctx.save();
+        ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px DM Sans, sans-serif`;
+        ctx.fillStyle = box.color || "#ffffff";
+        ctx.textAlign = box.align || "center";
+        ctx.shadowColor = "rgba(0,0,0,0.7)";
+        ctx.shadowBlur = 6;
+        const lines = box.text.split("\n");
+        const lineH = (box.fontSize || 18) * 1.4;
+        const startX = box.align === "center" ? box.x + box.w / 2 : box.x + 8;
+        lines.forEach((line, i) => {
+          ctx.fillText(line, startX, box.y + (box.fontSize || 18) + i * lineH, box.w);
+        });
+        ctx.restore();
+      }
 
       const dataUrl = canvas.toDataURL("image/png");
-      setSavedImageUrl(dataUrl);
-      localStorage.setItem("ambaig_last_image", canvas.toDataURL("image/jpeg", 0.85));
+
+      // Store compressed version for post manager
+      const jpgUrl = canvas.toDataURL("image/jpeg", 0.85);
+      try { localStorage.setItem("ambaig_last_image", jpgUrl); } catch (e) {}
 
       // Trigger download
       const link = document.createElement("a");
@@ -295,10 +356,12 @@ export default function Home() {
       link.click();
       document.body.removeChild(link);
 
-      showToast("✅ Image downloaded! Check your Downloads folder.");
+      setToast("✅ Image saved! Check your Downloads folder.");
+      setTimeout(() => setToast(""), 3500);
     } catch (err) {
       console.error(err);
-      showToast("⚠️ Download failed. Try on Chrome desktop.");
+      setToast("⚠️ Could not export. Screenshot the canvas manually.");
+      setTimeout(() => setToast(""), 4000);
     }
     setSaving(false);
   };
@@ -414,11 +477,9 @@ export default function Home() {
             {saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}
           </button>
 
-          {savedImageUrl && (
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>
-              📤 Go to Post Manager →
-            </button>
-          )}
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>
+            📤 Go to Post Manager →
+          </button>
 
           <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>
             ✨ Generate Captions →
