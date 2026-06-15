@@ -3,96 +3,84 @@ import { getTemplateRegistry } from "../utils/loadTemplates";
 import { getTemplateComponent } from "../utils/templateComponents";
 import { useRouter } from "next/router";
 
+// ── Text styles ──────────────────────────────────────────────────
+const TEXT_STYLES = {
+  shadow:   { textShadow: "0 2px 8px rgba(0,0,0,0.9)", background: "transparent" },
+  outline:  { textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000", background: "transparent" },
+  pill:     { textShadow: "none", background: "rgba(0,0,0,0.55)", borderRadius: 6, padding: "4px 12px" },
+  plain:    { textShadow: "none", background: "transparent" },
+};
+
 // ── Draggable text box ───────────────────────────────────────────
 function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
   const [editing, setEditing] = useState(false);
-  const editRef = useRef(null);
+  const editRef  = useRef(null);
+  const wrapRef  = useRef(null);
 
-  // Enter edit mode on double-click/tap
   const handleDoubleClick = (e) => {
     e.stopPropagation();
     setEditing(true);
     setTimeout(() => {
       editRef.current?.focus();
-      // Place cursor at end
       const el = editRef.current;
       if (el) {
         const range = document.createRange();
         range.selectNodeContents(el);
         range.collapse(false);
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(range);
+        window.getSelection()?.removeAllRanges();
+        window.getSelection()?.addRange(range);
       }
     }, 50);
   };
 
-  // Exit edit mode on blur
   const handleBlur = (e) => {
     setEditing(false);
-    onUpdate({ text: e.target.innerText || box.text });
+    const newText = e.target.innerText || box.text;
+    onUpdate({ text: newText });
   };
 
-  // Deselect stops editing too
-  useEffect(() => {
-    if (!selected) setEditing(false);
-  }, [selected]);
+  useEffect(() => { if (!selected) setEditing(false); }, [selected]);
 
   const startDrag = (e) => {
-    if (editing) return; // don't drag while editing
+    if (editing) return;
     e.stopPropagation();
     onSelect();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const canvasRect = canvasRef.current?.getBoundingClientRect();
-    const offsetX = cx - (canvasRect?.left || 0) - box.x;
-    const offsetY = cy - (canvasRect?.top || 0) - box.y;
-
+    const offsetX = cx - rect.left - box.x;
+    const offsetY = cy - rect.top - box.y;
     const move = (ev) => {
       ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      const cw = canvasRect?.width || 600;
-      const ch = canvasRect?.height || 900;
       onUpdate({
-        x: Math.max(0, Math.min(mx - (canvasRect?.left || 0) - offsetX, cw - box.w)),
-        y: Math.max(0, Math.min(my - (canvasRect?.top || 0) - offsetY, ch - 30)),
+        x: Math.max(0, Math.min(mx - rect.left - offsetX, rect.width - 20)),
+        y: Math.max(0, Math.min(my - rect.top - offsetY, rect.height - 20)),
       });
     };
     const up = () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move);
-      window.removeEventListener("touchend", up);
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
     };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", move, { passive: false });
-    window.addEventListener("touchend", up);
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
-  const startResizeW = (e) => {
-    e.stopPropagation();
-    const sx = e.clientX || e.touches?.[0]?.clientX || 0;
-    const sw = box.w;
-    const move = (ev) => {
-      const mx = ev.clientX || ev.touches?.[0]?.clientX || 0;
-      onUpdate({ w: Math.max(60, sw + mx - sx) });
-    };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-  };
+  const style = TEXT_STYLES[box.style || "shadow"];
 
   return (
     <div
+      ref={wrapRef}
       onMouseDown={startDrag}
       onTouchStart={startDrag}
       onDoubleClick={handleDoubleClick}
       style={{
         position: "absolute",
         left: box.x, top: box.y,
-        width: box.w,
+        // Auto-width: fit content, max 90% of canvas
+        width: "auto", maxWidth: "90%",
         cursor: editing ? "text" : "move",
         outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
         borderRadius: 4,
@@ -101,25 +89,15 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
         zIndex: 20,
       }}
     >
-      {/* Controls shown when selected but not editing */}
       {selected && !editing && (
         <>
-          <button
-            onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700, lineHeight: 1 }}
-          >×</button>
-          <div
-            onMouseDown={startResizeW}
-            style={{ position: "absolute", right: -7, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, background: "#c084fc", borderRadius: 3, cursor: "ew-resize", zIndex: 30 }}
-          />
-          {/* Edit hint */}
-          <div style={{ position: "absolute", bottom: -18, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
+          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
+          <div style={{ position: "absolute", bottom: -16, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
             double-tap to edit
           </div>
         </>
       )}
-
-      {/* Text content */}
       <div
         ref={editRef}
         contentEditable={editing}
@@ -131,8 +109,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
           color: box.color || "#ffffff",
           fontSize: box.fontSize || 18,
           fontWeight: box.bold ? 700 : 400,
-          textAlign: "left",
-          textShadow: "0 1px 6px rgba(0,0,0,0.8)",
+          textAlign: box.align || "left",
           padding: "4px 8px",
           minHeight: 28,
           outline: "none",
@@ -140,6 +117,9 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           fontFamily: "DM Sans, sans-serif",
+          display: "inline-block",
+          minWidth: 40,
+          ...style,
         }}
       >{box.text}</div>
     </div>
@@ -345,7 +325,31 @@ export default function Home() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
-  // ── Load pending caption text layers when page mounts ──
+  // ── Persist canvas state so it survives navigation ──
+  useEffect(() => {
+    const saved = localStorage.getItem("ambaig_canvas_state");
+    if (saved) {
+      try {
+        const state = JSON.parse(saved);
+        if (state.textBoxes?.length) setTextBoxes(state.textBoxes);
+        if (state.images?.length) setImages(state.images);
+        if (state.bg) setBg(state.bg);
+        if (state.bgOpacity) setBgOpacity(state.bgOpacity);
+        if (state.canvasSize) setCanvasSize(state.canvasSize);
+        if (state.showTemplate !== undefined) setShowTemplate(state.showTemplate);
+        if (state.selected) setSelected(state.selected);
+      } catch (e) {}
+    }
+  }, []);
+
+  // Auto-save canvas state whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("ambaig_canvas_state", JSON.stringify({
+        textBoxes, images, bg, bgOpacity, canvasSize, showTemplate, selected,
+      }));
+    } catch (e) {}
+  }, [textBoxes, images, bg, bgOpacity, canvasSize, showTemplate, selected]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -506,14 +510,29 @@ export default function Home() {
         ctx.save();
         ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
         ctx.fillStyle = box.color || "#ffffff";
-        ctx.textAlign = "left"; // always left align
-        ctx.shadowColor = "rgba(0,0,0,0.75)";
-        ctx.shadowBlur = 8;
+        const align = box.align || "left";
+        ctx.textAlign = align;
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.shadowBlur = (box.style === "plain" || box.style === "pill") ? 0 : 8;
+
+        // Pill background
+        if (box.style === "pill") {
+          const lines = box.text.split("\n");
+          const lh = (box.fontSize || 18) * 1.4;
+          const boxH = lines.length * lh + 8;
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.shadowBlur = 0;
+          ctx.beginPath();
+          ctx.roundRect(box.x, box.y, Math.min(box.fontSize * box.text.length * 0.6 + 24, sz.w - box.x), boxH, 6);
+          ctx.fill();
+          ctx.fillStyle = box.color || "#ffffff";
+        }
+
         const lines = box.text.split("\n");
         const lineH = (box.fontSize || 18) * 1.4;
-        const drawX = box.x + 8;
+        const drawX = align === "left" ? box.x + 8 : align === "right" ? box.x + 200 - 8 : box.x + 100;
         lines.forEach((line, i) => {
-          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, box.w - 16);
+          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, sz.w - box.x - 16);
         });
         ctx.restore();
       }
@@ -611,14 +630,74 @@ export default function Home() {
           {/* Text on canvas */}
           <div className="card">
             <p className="plabel">Text on Canvas</p>
-            <p style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.5 }}>
-              Text is placed as a moveable layer — drag it anywhere on canvas.
-            </p>
+
+            {/* If a text box is selected — show its controls */}
+            {activeEl?.type === "text" && (() => {
+              const box = textBoxes.find(b => b.id === activeEl.id);
+              if (!box) return null;
+              const update = (patch) => setTextBoxes(prev => prev.map(b => b.id === box.id ? { ...b, ...patch } : b));
+              return (
+                <div style={{ marginBottom: 12, padding: "10px 12px", background: "var(--accent-glow)", border: "1px solid var(--accent)", borderRadius: 10 }}>
+                  <p style={{ fontSize: "0.7rem", color: "var(--accent)", fontWeight: 700, marginBottom: 8 }}>✏️ Selected text</p>
+
+                  {/* Color + Size */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <label className="field-label">Color</label>
+                      <input type="color" value={box.color || "#ffffff"}
+                        onChange={e => update({ color: e.target.value })}
+                        style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label className="field-label">Size</label>
+                      <input type="number" value={box.fontSize || 22} min={10} max={80}
+                        onChange={e => update({ fontSize: Number(e.target.value) })} />
+                    </div>
+                  </div>
+
+                  {/* Alignment */}
+                  <label className="field-label">Alignment</label>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                    {["left","center","right"].map(a => (
+                      <button key={a} onClick={() => update({ align: a })} style={{
+                        flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
+                        border: box.align === a ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        background: box.align === a ? "var(--accent-glow)" : "transparent",
+                        color: box.align === a ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer",
+                      }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
+                    ))}
+                  </div>
+
+                  {/* Style */}
+                  <label className="field-label">Style</label>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                    {Object.keys(TEXT_STYLES).map(s => (
+                      <button key={s} onClick={() => update({ style: s })} style={{
+                        flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
+                        border: (box.style || "shadow") === s ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        background: (box.style || "shadow") === s ? "var(--accent-glow)" : "transparent",
+                        color: (box.style || "shadow") === s ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer", textTransform: "capitalize",
+                      }}>{s}</button>
+                    ))}
+                  </div>
+
+                  {/* Bold */}
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <input type="checkbox" checked={!!box.bold} onChange={e => update({ bold: e.target.checked })} style={{ accentColor: "var(--accent)" }} /> Bold
+                  </label>
+                </div>
+              );
+            })()}
+
+            {/* New text defaults */}
+            <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: 8 }}>New text settings:</p>
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               <div style={{ flex: 1 }}>
                 <label className="field-label">Color</label>
                 <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
-                  style={{ width: "100%", height: 34, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                  style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
               </div>
               <div style={{ flex: 1 }}>
                 <label className="field-label">Size</label>
