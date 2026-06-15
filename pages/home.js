@@ -150,17 +150,24 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
 function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect }) {
   const [mode, setMode] = useState("move");
 
+  const getCanvasRect = () => canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 600, height: 900 };
+
   const startDrag = (e) => {
     if (mode === "crop") { startCrop(e); return; }
     e.preventDefault(); e.stopPropagation(); onSelect();
+    const rect = getCanvasRect();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = cx - img.x, dy = cy - img.y;
-    const rect = canvasRef.current?.getBoundingClientRect() || { width: 600, height: 900 };
+    const offsetX = cx - rect.left - img.x;
+    const offsetY = cy - rect.top - img.y;
     const move = (ev) => {
+      ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onUpdate({ x: Math.max(0, Math.min(mx - dx, rect.width - img.w)), y: Math.max(0, Math.min(my - dy, rect.height - img.h)) });
+      onUpdate({
+        x: Math.max(0, Math.min(mx - rect.left - offsetX, rect.width - img.w)),
+        y: Math.max(0, Math.min(my - rect.top - offsetY, rect.height - img.h)),
+      });
     };
     const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
@@ -173,6 +180,7 @@ function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect })
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
     const sox = img.ox ?? 50, soy = img.oy ?? 50;
     const move = (ev) => {
+      ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
       onUpdate({ ox: Math.max(0, Math.min(sox - (mx - cx) * 0.3, 100)), oy: Math.max(0, Math.min(soy - (my - cy) * 0.3, 100)) });
@@ -184,13 +192,18 @@ function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect })
 
   const startResize = (e) => {
     e.preventDefault(); e.stopPropagation();
+    const rect = getCanvasRect();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
     const sw = img.w, sh = img.h;
     const move = (ev) => {
+      ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onUpdate({ w: Math.max(50, sw + mx - cx), h: Math.max(50, sh + my - cy) });
+      onUpdate({
+        w: Math.max(50, Math.min(sw + mx - cx, rect.width - img.x)),   // clamp to canvas right edge
+        h: Math.max(50, Math.min(sh + my - cy, rect.height - img.y)),  // clamp to canvas bottom
+      });
     };
     const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
@@ -209,13 +222,14 @@ function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect })
       {selected && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -10, left: -10, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 13, cursor: "pointer", zIndex: 25, fontWeight: 700 }}>×</button>
+            style={{ position: "absolute", top: -10, left: -10, width: 24, height: 24, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
           <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }}
-            style={{ position: "absolute", top: -10, right: -10, width: 22, height: 22, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "none", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25 }}>
+            style={{ position: "absolute", top: -10, right: -10, width: 24, height: 24, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>
             {mode === "move" ? "✂" : "↔"}
           </button>
+          {/* Resize handle — bottom right, inside the image so never off-screen */}
           <div onMouseDown={startResize} onTouchStart={startResize}
-            style={{ position: "absolute", bottom: -6, right: -6, width: 18, height: 18, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize", zIndex: 25 }} />
+            style={{ position: "absolute", bottom: 4, right: 4, width: 20, height: 20, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white" }} />
           <div style={{ position: "absolute", bottom: 4, left: 4, background: "rgba(0,0,0,0.55)", color: "white", fontSize: 9, padding: "2px 5px", borderRadius: 3, pointerEvents: "none" }}>
             {mode === "move" ? "move" : "pan/crop"}
           </div>
@@ -405,12 +419,15 @@ export default function Home() {
 
   const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold) => {
     const id = Date.now();
+    const canvasW = canvasRef.current?.offsetWidth || sz.w;
+    const canvasH = canvasRef.current?.offsetHeight || sz.h;
     setTextBoxes(prev => [...prev, {
       id, text,
-      x: 30,
-      y: Math.max(30, sz.h / 2 - 60),
-      w: sz.w - 60,
-      color, fontSize: size, bold, align: "center",
+      x: 16,
+      y: Math.max(30, canvasH / 2 - 60),
+      w: Math.min(canvasW - 32, sz.w - 32), // never wider than canvas
+      color, fontSize: size, bold,
+      align: "left", // always left by default
     }]);
     setActiveEl({ type: "text", id });
   };
@@ -418,6 +435,14 @@ export default function Home() {
   // ── Download PNG using native Canvas API (works on mobile) ──
   const downloadPNG = async () => {
     setSaving(true);
+
+    // Flush any contentEditable text that hasn't been saved via blur yet
+    const editables = canvasRef.current?.querySelectorAll("[contenteditable=true]");
+    if (editables?.length) {
+      editables.forEach(el => el.blur());
+      await new Promise(r => setTimeout(r, 80));
+    }
+
     setActiveEl(null);
     await new Promise(r => setTimeout(r, 150));
 
@@ -477,17 +502,18 @@ export default function Home() {
 
       // 4. Draw text boxes
       for (const box of textBoxes) {
+        if (!box.text?.trim()) continue;
         ctx.save();
-        ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px DM Sans, sans-serif`;
+        ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
         ctx.fillStyle = box.color || "#ffffff";
-        ctx.textAlign = box.align || "center";
-        ctx.shadowColor = "rgba(0,0,0,0.7)";
-        ctx.shadowBlur = 6;
+        ctx.textAlign = "left"; // always left align
+        ctx.shadowColor = "rgba(0,0,0,0.75)";
+        ctx.shadowBlur = 8;
         const lines = box.text.split("\n");
         const lineH = (box.fontSize || 18) * 1.4;
-        const startX = box.align === "center" ? box.x + box.w / 2 : box.x + 8;
+        const drawX = box.x + 8;
         lines.forEach((line, i) => {
-          ctx.fillText(line, startX, box.y + (box.fontSize || 18) + i * lineH, box.w);
+          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, box.w - 16);
         });
         ctx.restore();
       }
@@ -685,17 +711,35 @@ export default function Home() {
         </div>
 
         {/* ── Canvas ── */}
-        <div style={{ flex: 1, minWidth: 280 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
             Canvas — {sz.w}×{sz.h}px
-            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· element selected</span>}
+            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap canvas background to deselect</span>}
           </p>
-          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }}>
-            <div
-              ref={canvasRef}
-              onClick={(e) => { if (e.target === canvasRef.current) setActiveEl(null); }}
-              style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff", flexShrink: 0 }}
-            >
+          {/* Scale canvas to fit screen width on mobile */}
+          <div
+            style={{ width: "100%", overflowX: "hidden" }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setActiveEl(null);
+            }}
+          >
+            <div style={{
+              transformOrigin: "top left",
+              // Scale down on small screens so it fits without scrolling
+              transform: typeof window !== "undefined" && window.innerWidth < 768
+                ? `scale(${Math.min(1, (window.innerWidth - 32) / sz.w)})`
+                : "scale(1)",
+              // Keep layout height correct after scaling
+              height: typeof window !== "undefined" && window.innerWidth < 768
+                ? sz.h * Math.min(1, (window.innerWidth - 32) / sz.w)
+                : sz.h,
+              width: sz.w,
+            }}>
+              <div
+                ref={canvasRef}
+                onClick={(e) => { if (e.target === canvasRef.current) setActiveEl(null); }}
+                style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}
+              >
               {/* 1. Background */}
               {bg && bg.src && (
                 <BgImage
@@ -736,10 +780,11 @@ export default function Home() {
                   onRemove={() => { setTextBoxes(prev => prev.filter(b => b.id !== box.id)); setActiveEl(null); }}
                 />
               ))}
-            </div>
-          </div>
+            </div>{/* end canvasRef div */}
+            </div>{/* end scale wrapper */}
+          </div>{/* end outer width wrapper */}
           <p style={{ marginTop: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>
-            💡 Layers: Background → Template → Images → Text. Captions from AI appear here when you click "Add to Canvas".
+            💡 Single tap to select & move · Double tap to edit text · Tap canvas to deselect
           </p>
         </div>
       </div>
