@@ -5,61 +5,141 @@ import { useRouter } from "next/router";
 
 // ── Draggable text box ───────────────────────────────────────────
 function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
+  const [editing, setEditing] = useState(false);
+  const editRef = useRef(null);
+
+  // Enter edit mode on double-click/tap
+  const handleDoubleClick = (e) => {
+    e.stopPropagation();
+    setEditing(true);
+    setTimeout(() => {
+      editRef.current?.focus();
+      // Place cursor at end
+      const el = editRef.current;
+      if (el) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    }, 50);
+  };
+
+  // Exit edit mode on blur
+  const handleBlur = (e) => {
+    setEditing(false);
+    onUpdate({ text: e.target.innerText || box.text });
+  };
+
+  // Deselect stops editing too
+  useEffect(() => {
+    if (!selected) setEditing(false);
+  }, [selected]);
+
   const startDrag = (e) => {
-    if (e.target.getAttribute("contenteditable") === "true") return;
+    if (editing) return; // don't drag while editing
     e.stopPropagation();
     onSelect();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const sx = cx - box.x, sy = cy - box.y;
-    const rect = canvasRef.current?.getBoundingClientRect() || { width: 600, height: 900 };
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    const offsetX = cx - (canvasRect?.left || 0) - box.x;
+    const offsetY = cy - (canvasRect?.top || 0) - box.y;
+
     const move = (ev) => {
+      ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onUpdate({ x: Math.max(0, Math.min(mx - sx, rect.width - box.w)), y: Math.max(0, Math.min(my - sy, rect.height - 30)) });
+      const cw = canvasRect?.width || 600;
+      const ch = canvasRect?.height || 900;
+      onUpdate({
+        x: Math.max(0, Math.min(mx - (canvasRect?.left || 0) - offsetX, cw - box.w)),
+        y: Math.max(0, Math.min(my - (canvasRect?.top || 0) - offsetY, ch - 30)),
+      });
     };
     const up = () => {
-      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
     };
-    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
   };
 
   const startResizeW = (e) => {
     e.stopPropagation();
-    const sx = e.clientX, sw = box.w;
-    const move = (ev) => onUpdate({ w: Math.max(80, sw + ev.clientX - sx) });
+    const sx = e.clientX || e.touches?.[0]?.clientX || 0;
+    const sw = box.w;
+    const move = (ev) => {
+      const mx = ev.clientX || ev.touches?.[0]?.clientX || 0;
+      onUpdate({ w: Math.max(60, sw + mx - sx) });
+    };
     const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
-    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
   };
 
   return (
     <div
-      onMouseDown={startDrag} onTouchStart={startDrag}
-      style={{ position: "absolute", left: box.x, top: box.y, width: box.w, cursor: "move",
-        outline: selected ? "2px dashed #c084fc" : "2px dashed transparent",
-        borderRadius: 4, userSelect: "none", touchAction: "none", zIndex: 20 }}
+      onMouseDown={startDrag}
+      onTouchStart={startDrag}
+      onDoubleClick={handleDoubleClick}
+      style={{
+        position: "absolute",
+        left: box.x, top: box.y,
+        width: box.w,
+        cursor: editing ? "text" : "move",
+        outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
+        borderRadius: 4,
+        userSelect: editing ? "text" : "none",
+        touchAction: editing ? "auto" : "none",
+        zIndex: 20,
+      }}
     >
-      {selected && (
+      {/* Controls shown when selected but not editing */}
+      {selected && !editing && (
         <>
-          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -11, right: -11, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
-          <div onMouseDown={startResizeW}
-            style={{ position: "absolute", right: -6, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, background: "#c084fc", borderRadius: 3, cursor: "ew-resize", zIndex: 30 }} />
+          <button
+            onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "none", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700, lineHeight: 1 }}
+          >×</button>
+          <div
+            onMouseDown={startResizeW}
+            style={{ position: "absolute", right: -7, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, background: "#c084fc", borderRadius: 3, cursor: "ew-resize", zIndex: 30 }}
+          />
+          {/* Edit hint */}
+          <div style={{ position: "absolute", bottom: -18, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
+            double-tap to edit
+          </div>
         </>
       )}
+
+      {/* Text content */}
       <div
-        contentEditable={selected} suppressContentEditableWarning
-        onBlur={(e) => onUpdate({ text: e.target.innerText })}
-        onMouseDown={(e) => { if (selected) e.stopPropagation(); }}
+        ref={editRef}
+        contentEditable={editing}
+        suppressContentEditableWarning
+        onBlur={handleBlur}
+        onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
+        onTouchStart={(e) => { if (editing) e.stopPropagation(); }}
         style={{
-          color: box.color || "#ffffff", fontSize: box.fontSize || 18,
-          fontWeight: box.bold ? 700 : 400, textAlign: box.align || "center",
-          textShadow: "0 1px 6px rgba(0,0,0,0.8)", padding: "4px 8px",
-          minHeight: 28, outline: "none", lineHeight: 1.4,
-          whiteSpace: "pre-wrap", wordBreak: "break-word",
-          cursor: selected ? "text" : "move", fontFamily: "DM Sans, sans-serif",
+          color: box.color || "#ffffff",
+          fontSize: box.fontSize || 18,
+          fontWeight: box.bold ? 700 : 400,
+          textAlign: "left",
+          textShadow: "0 1px 6px rgba(0,0,0,0.8)",
+          padding: "4px 8px",
+          minHeight: 28,
+          outline: "none",
+          lineHeight: 1.4,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          fontFamily: "DM Sans, sans-serif",
         }}
       >{box.text}</div>
     </div>
