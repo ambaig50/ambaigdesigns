@@ -80,8 +80,8 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       style={{
         position: "absolute",
         left: box.x, top: box.y,
-        // Auto-width: fit content, max 90% of canvas
-        width: "auto", maxWidth: "90%",
+        // Fixed width from box.x to canvas right edge (568 = 600 - 16 - 16)
+        width: Math.min(568 - box.x, 568),
         cursor: editing ? "text" : "move",
         outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
         borderRadius: 4,
@@ -91,13 +91,8 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       }}
     >
       {selected && !editing && (
-        <>
-          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
-          <div style={{ position: "absolute", bottom: -16, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
-            double-tap to edit
-          </div>
-        </>
+        <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+          style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
       )}
       <div
         ref={editRef}
@@ -111,18 +106,23 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
           fontSize: box.fontSize || 18,
           fontWeight: box.bold ? 700 : 400,
           textAlign: box.align || "left",
-          padding: "4px 8px",
+          padding: "4px 0",        // no horizontal padding — left edge = box.x exactly
           minHeight: 28,
           outline: "none",
           lineHeight: 1.4,
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
           fontFamily: "DM Sans, sans-serif",
-          display: "inline-block",
-          minWidth: 40,
+          display: "block",        // block so textAlign works on full width
+          width: "100%",
           ...style,
         }}
       >{box.text}</div>
+      {selected && !editing && (
+        <div style={{ position: "absolute", bottom: -16, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
+          double-tap to edit
+        </div>
+      )}
     </div>
   );
 }
@@ -496,7 +496,16 @@ export default function Home() {
     reader.onload = (ev) => {
       const src = ev.target.result;
       if (src) {
-        setImages(prev => [...prev, { id: Date.now(), src, x: 60, y: 60, w: 200, h: 200, ox: 50, oy: 50 }]);
+        // Place at 1/3 of canvas width, centered — always in canvas coordinate space
+        const imgW = Math.round(sz.w * 0.5);
+        const imgH = imgW;
+        setImages(prev => [...prev, {
+          id: Date.now(), src,
+          x: Math.round((sz.w - imgW) / 2),
+          y: Math.round((sz.h - imgH) / 4),
+          w: imgW, h: imgH,
+          ox: 50, oy: 50,
+        }]);
       }
       e.target.value = "";
     };
@@ -506,15 +515,13 @@ export default function Home() {
 
   const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold) => {
     const id = Date.now();
-    const canvasW = canvasRef.current?.offsetWidth || sz.w;
-    const canvasH = canvasRef.current?.offsetHeight || sz.h;
+    // Always use canvas coordinate space (sz.w/sz.h), never offsetWidth
     setTextBoxes(prev => [...prev, {
       id, text,
       x: 16,
-      y: Math.max(30, canvasH / 2 - 60),
-      w: Math.min(canvasW - 32, sz.w - 32), // never wider than canvas
+      y: Math.max(30, Math.round(sz.h / 2) - 60),
       color, fontSize: size, bold,
-      align: "left", // always left by default
+      align: "left",
     }]);
     setActiveEl({ type: "text", id });
   };
@@ -594,6 +601,7 @@ export default function Home() {
         ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
         ctx.fillStyle = box.color || "#ffffff";
         const align = box.align || "left";
+        const boxW = Math.min(568 - box.x, 568); // matches DOM width
         ctx.textAlign = align;
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = (box.style === "plain" || box.style === "pill") ? 0 : 8;
@@ -602,20 +610,24 @@ export default function Home() {
         if (box.style === "pill") {
           const lines = box.text.split("\n");
           const lh = (box.fontSize || 18) * 1.4;
-          const boxH = lines.length * lh + 8;
+          const boxH = lines.length * lh + 12;
           ctx.fillStyle = "rgba(0,0,0,0.55)";
           ctx.shadowBlur = 0;
           ctx.beginPath();
-          ctx.roundRect(box.x, box.y, Math.min(box.fontSize * box.text.length * 0.6 + 24, sz.w - box.x), boxH, 6);
+          ctx.roundRect(box.x, box.y, boxW, boxH, 6);
           ctx.fill();
           ctx.fillStyle = box.color || "#ffffff";
         }
 
         const lines = box.text.split("\n");
         const lineH = (box.fontSize || 18) * 1.4;
-        const drawX = align === "left" ? box.x + 8 : align === "right" ? box.x + 200 - 8 : box.x + 100;
+        // x anchor: left=box.x, center=box.x+boxW/2, right=box.x+boxW
+        const drawX = align === "left" ? box.x
+          : align === "center" ? box.x + boxW / 2
+          : box.x + boxW;
+
         lines.forEach((line, i) => {
-          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, sz.w - box.x - 16);
+          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, boxW);
         });
         ctx.restore();
       }
