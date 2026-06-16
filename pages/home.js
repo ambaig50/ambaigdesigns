@@ -127,93 +127,162 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
   );
 }
 
-// ── Draggable + resizable + crop image ──────────────────────────
-function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect }) {
+// ── Draggable + pinch-resize + crop image ───────────────────────
+function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const [mode, setMode] = useState("move");
 
-  const getCanvasRect = () => canvasRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 600, height: 900 };
+  // Convert screen coords to canvas coords accounting for CSS scale
+  const toCanvas = (screenX, screenY) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return { x: screenX, y: screenY };
+    return {
+      x: (screenX - rect.left) / scale,
+      y: (screenY - rect.top) / scale,
+    };
+  };
 
   const startDrag = (e) => {
     if (mode === "crop") { startCrop(e); return; }
     e.preventDefault(); e.stopPropagation(); onSelect();
-    const rect = getCanvasRect();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const offsetX = cx - rect.left - img.x;
-    const offsetY = cy - rect.top - img.y;
+
+    // Two finger pinch = resize
+    if (e.touches && e.touches.length === 2) { startPinch(e); return; }
+
+    const pt = e.touches ? e.touches[0] : e;
+    const start = toCanvas(pt.clientX, pt.clientY);
+    const origX = img.x, origY = img.y;
+
     const move = (ev) => {
       ev.preventDefault();
-      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      // Switch to pinch if second finger added
+      if (ev.touches && ev.touches.length === 2) return;
+      const p = ev.touches ? ev.touches[0] : ev;
+      const cur = toCanvas(p.clientX, p.clientY);
+      const canvasW = canvasRef.current?.offsetWidth || 600;
+      const canvasH = canvasRef.current?.offsetHeight || 900;
       onUpdate({
-        x: Math.max(0, Math.min(mx - rect.left - offsetX, rect.width - img.w)),
-        y: Math.max(0, Math.min(my - rect.top - offsetY, rect.height - img.h)),
+        x: Math.max(0, Math.min(origX + cur.x - start.x, canvasW - img.w)),
+        y: Math.max(0, Math.min(origY + cur.y - start.y, canvasH - img.h)),
       });
     };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+    };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+  };
+
+  // Pinch-to-resize with two fingers
+  const startPinch = (e) => {
+    e.preventDefault();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const startDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) / scale;
+    const startW = img.w, startH = img.h;
+
+    const move = (ev) => {
+      if (ev.touches.length < 2) return;
+      ev.preventDefault();
+      const d = Math.hypot(ev.touches[1].clientX - ev.touches[0].clientX, ev.touches[1].clientY - ev.touches[0].clientY) / scale;
+      const ratio = d / startDist;
+      onUpdate({
+        w: Math.max(50, Math.round(startW * ratio)),
+        h: Math.max(50, Math.round(startH * ratio)),
+      });
+    };
+    const up = () => {
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", up);
   };
 
   const startCrop = (e) => {
     e.preventDefault(); e.stopPropagation();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const pt = e.touches ? e.touches[0] : e;
+    const startX = pt.clientX, startY = pt.clientY;
     const sox = img.ox ?? 50, soy = img.oy ?? 50;
     const move = (ev) => {
       ev.preventDefault();
-      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onUpdate({ ox: Math.max(0, Math.min(sox - (mx - cx) * 0.3, 100)), oy: Math.max(0, Math.min(soy - (my - cy) * 0.3, 100)) });
+      const p = ev.touches ? ev.touches[0] : ev;
+      onUpdate({
+        ox: Math.max(0, Math.min(sox - (p.clientX - startX) * 0.3, 100)),
+        oy: Math.max(0, Math.min(soy - (p.clientY - startY) * 0.3, 100)),
+      });
     };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+    };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
+  // Desktop resize from corner
   const startResize = (e) => {
     e.preventDefault(); e.stopPropagation();
-    const rect = getCanvasRect();
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const pt = e.touches ? e.touches[0] : e;
+    const start = toCanvas(pt.clientX, pt.clientY);
     const sw = img.w, sh = img.h;
+    const canvasW = canvasRef.current?.offsetWidth || 600;
+    const canvasH = canvasRef.current?.offsetHeight || 900;
     const move = (ev) => {
       ev.preventDefault();
-      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const p = ev.touches ? ev.touches[0] : ev;
+      const cur = toCanvas(p.clientX, p.clientY);
       onUpdate({
-        w: Math.max(50, Math.min(sw + mx - cx, rect.width - img.x)),   // clamp to canvas right edge
-        h: Math.max(50, Math.min(sh + my - cy, rect.height - img.y)),  // clamp to canvas bottom
+        w: Math.max(50, Math.min(sw + cur.x - start.x, canvasW - img.x)),
+        h: Math.max(50, Math.min(sh + cur.y - start.y, canvasH - img.y)),
       });
     };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+    };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
   return (
-    <div onMouseDown={startDrag} onTouchStart={startDrag}
+    <div
+      onMouseDown={startDrag}
+      onTouchStart={(e) => {
+        if (e.touches.length === 2) { onSelect(); startPinch(e); }
+        else startDrag(e);
+      }}
       data-canvas-el="img"
-      style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h,
+      style={{
+        position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h,
         cursor: mode === "crop" ? "crosshair" : "move",
         outline: selected ? "2px solid #c084fc" : "2px solid transparent",
-        userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15 }}
+        userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15,
+      }}
     >
       <img src={img.src} alt="" draggable={false}
         style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
+
       {selected && (
         <>
+          {/* Delete — top left */}
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: -10, left: -10, width: 24, height: 24, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+
+          {/* Crop toggle — top right */}
           <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }}
-            style={{ position: "absolute", top: -10, right: -10, width: 24, height: 24, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>
             {mode === "move" ? "✂" : "↔"}
           </button>
-          {/* Resize handle — bottom right, inside the image so never off-screen */}
+
+          {/* Resize handle — bottom right INSIDE the image */}
           <div onMouseDown={startResize} onTouchStart={startResize}
-            style={{ position: "absolute", bottom: 4, right: 4, width: 20, height: 20, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white" }} />
-          <div style={{ position: "absolute", bottom: 4, left: 4, background: "rgba(0,0,0,0.55)", color: "white", fontSize: 9, padding: "2px 5px", borderRadius: 3, pointerEvents: "none" }}>
-            {mode === "move" ? "move" : "pan/crop"}
+            style={{ position: "absolute", bottom: 4, right: 4, width: 22, height: 22, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 10, color: "white", pointerEvents: "none" }}>⤡</span>
+          </div>
+
+          {/* Pinch hint on mobile */}
+          <div style={{ position: "absolute", bottom: 4, left: 34, background: "rgba(0,0,0,0.6)", color: "white", fontSize: 8, padding: "2px 5px", borderRadius: 3, pointerEvents: "none", whiteSpace: "nowrap" }}>
+            {mode === "crop" ? "drag to pan" : "pinch to resize"}
           </div>
         </>
       )}
@@ -325,6 +394,18 @@ export default function Home() {
   const TemplateComponent = getTemplateComponent(selected.category, selected.id);
   const sz = SIZES[canvasSize];
 
+  // Compute CSS scale so canvas fits mobile screen
+  const [canvasScale, setCanvasScale] = useState(1);
+  useEffect(() => {
+    const compute = () => {
+      const available = Math.min(window.innerWidth - 28, sz.w);
+      setCanvasScale(available / sz.w);
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [sz.w]);
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
   // ── Persist canvas state so it survives navigation ──
@@ -362,13 +443,13 @@ export default function Home() {
             ...pending.map((p, i) => ({
               id: Date.now() + i,
               text: p.text,
-              x: 30,
-              y: Math.min(800, 480 + i * 90),
-              w: 540,
+              x: 16,
+              y: Math.min(820, 500 + i * 90),
               color: "#ffffff",
               fontSize: 15,
               bold: false,
-              align: "center",
+              align: "left",
+              style: "shadow",
             })),
           ]);
           localStorage.removeItem("ambaig_pending_text");
@@ -783,31 +864,20 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
             Canvas — {sz.w}×{sz.h}px
-            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap canvas background to deselect</span>}
+            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap canvas to deselect</span>}
           </p>
-          {/* Scale canvas to fit screen width on mobile */}
-          <div
-            style={{ width: "100%", overflowX: "hidden" }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setActiveEl(null);
-            }}
-          >
+          <div style={{ width: "100%", overflowX: "hidden" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setActiveEl(null); }}>
             <div style={{
               transformOrigin: "top left",
-              // Scale down on small screens so it fits without scrolling
-              transform: typeof window !== "undefined" && window.innerWidth < 768
-                ? `scale(${Math.min(1, (window.innerWidth - 32) / sz.w)})`
-                : "scale(1)",
-              // Keep layout height correct after scaling
-              height: typeof window !== "undefined" && window.innerWidth < 768
-                ? sz.h * Math.min(1, (window.innerWidth - 32) / sz.w)
-                : sz.h,
+              transform: `scale(${canvasScale})`,
               width: sz.w,
+              height: sz.h * canvasScale, // collapse extra height after scaling
+              marginBottom: sz.h * canvasScale - sz.h, // compensate
             }}>
               <div
                 ref={canvasRef}
                 onClick={(e) => {
-                  // Deselect if click was not on a draggable element
                   const isElement = e.target.closest("[data-canvas-el]");
                   if (!isElement) setActiveEl(null);
                 }}
@@ -837,6 +907,7 @@ export default function Home() {
               {/* 3. Overlay images */}
               {images.map(img => (
                 <CanvasImage key={img.id} img={img} canvasRef={canvasRef}
+                  scale={canvasScale}
                   selected={activeEl?.type === "img" && activeEl.id === img.id}
                   onSelect={() => setActiveEl({ type: "img", id: img.id })}
                   onUpdate={patch => setImages(prev => prev.map(i => i.id === img.id ? { ...i, ...patch } : i))}
@@ -853,9 +924,9 @@ export default function Home() {
                   onRemove={() => { setTextBoxes(prev => prev.filter(b => b.id !== box.id)); setActiveEl(null); }}
                 />
               ))}
-            </div>{/* end canvasRef div */}
-            </div>{/* end scale wrapper */}
-          </div>{/* end outer width wrapper */}
+            </div>{/* end canvasRef */}
+            </div>{/* end scale div */}
+          </div>{/* end outer wrapper */}
           <p style={{ marginTop: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>
             💡 Single tap to select & move · Double tap to edit text · Tap canvas to deselect
           </p>
