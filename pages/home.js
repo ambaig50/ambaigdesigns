@@ -80,8 +80,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       style={{
         position: "absolute",
         left: box.x, top: box.y,
-        // Fixed width from box.x to canvas right edge (568 = 600 - 16 - 16)
-        width: Math.min(568 - box.x, 568),
+        width: Math.max(80, 600 - box.x - 16), // spans to canvas right minus margin
         cursor: editing ? "text" : "move",
         outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
         borderRadius: 4,
@@ -90,15 +89,41 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
         zIndex: 20,
       }}
     >
+      {/* × inside top-left so never off-screen */}
       {selected && !editing && (
-        <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-          style={{ position: "absolute", top: -12, right: -12, width: 22, height: 22, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 13, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
+        <>
+          <button
+            onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 12, cursor: "pointer", zIndex: 30, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >×</button>
+          <div style={{ position: "absolute", bottom: -15, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
+            double-tap to edit
+          </div>
+        </>
       )}
       <div
         ref={editRef}
         contentEditable={editing}
         suppressContentEditableWarning
         onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (editing) e.stopPropagation();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            // Insert a plain line break so innerText captures \n correctly
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount) {
+              const range = sel.getRangeAt(0);
+              range.deleteContents();
+              const br = document.createTextNode("\n");
+              range.insertNode(br);
+              range.setStartAfter(br);
+              range.setEndAfter(br);
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          }
+        }}
         onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
         onTouchStart={(e) => { if (editing) e.stopPropagation(); }}
         style={{
@@ -106,23 +131,20 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
           fontSize: box.fontSize || 18,
           fontWeight: box.bold ? 700 : 400,
           textAlign: box.align || "left",
-          padding: "4px 0",        // no horizontal padding — left edge = box.x exactly
+          padding: editing ? "4px 4px 4px 26px" : "4px 4px 4px 26px",
           minHeight: 28,
           outline: "none",
-          lineHeight: 1.4,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",   // preserves newlines on Enter
+          wordBreak: "break-word",  // breaks long words
+          overflowWrap: "break-word",
           fontFamily: "DM Sans, sans-serif",
-          display: "block",        // block so textAlign works on full width
+          display: "block",
           width: "100%",
+          boxSizing: "border-box",
           ...style,
         }}
       >{box.text}</div>
-      {selected && !editing && (
-        <div style={{ position: "absolute", bottom: -16, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
-          double-tap to edit
-        </div>
-      )}
     </div>
   );
 }
@@ -394,12 +416,19 @@ export default function Home() {
   const TemplateComponent = getTemplateComponent(selected.category, selected.id);
   const sz = SIZES[canvasSize];
 
-  // Compute CSS scale so canvas fits mobile screen
+  // Compute CSS scale so canvas fits available container width
   const [canvasScale, setCanvasScale] = useState(1);
+  const canvasWrapRef = useRef(null);
   useEffect(() => {
     const compute = () => {
-      const available = Math.min(window.innerWidth - 28, sz.w);
-      setCanvasScale(available / sz.w);
+      // On mobile: full screen width minus padding
+      // On desktop: remaining space after 220px panel + gaps
+      const isMobile = window.innerWidth <= 768;
+      const available = isMobile
+        ? window.innerWidth - 20
+        : window.innerWidth - 240 - 60; // sidebar(220) + studio panel(220) + gaps
+      const scale = Math.min(1, available / sz.w);
+      setCanvasScale(scale);
     };
     compute();
     window.addEventListener("resize", compute);
@@ -594,23 +623,47 @@ export default function Home() {
         });
       }
 
-      // 4. Draw text boxes
+      // 4. Draw text boxes — manual word-wrap to match on-screen rendering
+      const wrapText = (text, maxWidth, font) => {
+        ctx.font = font;
+        const allLines = [];
+        text.split("\n").forEach(paragraph => {
+          const words = paragraph.split(" ");
+          let line = "";
+          words.forEach(word => {
+            const test = line ? line + " " + word : word;
+            if (ctx.measureText(test).width > maxWidth && line) {
+              allLines.push(line);
+              line = word;
+            } else {
+              line = test;
+            }
+          });
+          allLines.push(line);
+        });
+        return allLines;
+      };
+
       for (const box of textBoxes) {
         if (!box.text?.trim()) continue;
         ctx.save();
-        ctx.font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
+        const font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
+        ctx.font = font;
         ctx.fillStyle = box.color || "#ffffff";
         const align = box.align || "left";
-        const boxW = Math.min(568 - box.x, 568); // matches DOM width
+        const boxW = Math.max(80, 600 - box.x - 16); // matches DOM width
+        const textPadLeft = 26; // matches DOM padding-left
+        const wrapWidth = boxW - textPadLeft - 4;
         ctx.textAlign = align;
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = (box.style === "plain" || box.style === "pill") ? 0 : 8;
 
-        // Pill background
+        const lines = wrapText(box.text, wrapWidth, font);
+        const lineH = (box.fontSize || 18) * 1.5;
+
+        // Pill background sized to wrapped content
         if (box.style === "pill") {
-          const lines = box.text.split("\n");
-          const lh = (box.fontSize || 18) * 1.4;
-          const boxH = lines.length * lh + 12;
+          const boxH = lines.length * lineH + 12;
           ctx.fillStyle = "rgba(0,0,0,0.55)";
           ctx.shadowBlur = 0;
           ctx.beginPath();
@@ -619,15 +672,12 @@ export default function Home() {
           ctx.fillStyle = box.color || "#ffffff";
         }
 
-        const lines = box.text.split("\n");
-        const lineH = (box.fontSize || 18) * 1.4;
-        // x anchor: left=box.x, center=box.x+boxW/2, right=box.x+boxW
-        const drawX = align === "left" ? box.x
-          : align === "center" ? box.x + boxW / 2
-          : box.x + boxW;
+        const drawX = align === "left" ? box.x + textPadLeft
+          : align === "center" ? box.x + textPadLeft + wrapWidth / 2
+          : box.x + textPadLeft + wrapWidth;
 
         lines.forEach((line, i) => {
-          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH, boxW);
+          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH);
         });
         ctx.restore();
       }
@@ -677,10 +727,11 @@ export default function Home() {
         <p>Build your pin — background, images, text — then caption and post.</p>
       </div>
 
-      <div style={{ display: "flex", gap: 14, padding: "0 14px 80px", flexWrap: "wrap", alignItems: "flex-start" }}>
+      {/* ── Responsive layout ── */}
+      <div className="studio-layout">
 
         {/* ── Left panel ── */}
-        <div style={{ width: 215, minWidth: 200, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="studio-panel">
 
           {/* Canvas size */}
           <div className="card">
@@ -870,23 +921,42 @@ export default function Home() {
           <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>
             ✨ Generate Captions →
           </button>
-        </div>
+
+          {/* New Design */}
+          <button
+            onClick={() => {
+              if (!confirm("Clear canvas and start a new design?")) return;
+              setTextBoxes([]);
+              setImages([]);
+              setBg(null);
+              setBgOpacity(1);
+              setActiveEl(null);
+              setCanvasSize("portrait");
+              setShowTemplate(false);
+              localStorage.removeItem("ambaig_canvas_state");
+              setToast("✅ Canvas cleared — ready for new design");
+              setTimeout(() => setToast(""), 2500);
+            }}
+            style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem", textAlign: "center" }}
+          >
+            🗑 Clear & New Design
+          </button>
+
+        </div>{/* end panel */}
 
         {/* ── Canvas ── */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="studio-canvas-wrap">
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
             Canvas — {sz.w}×{sz.h}px
-            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap canvas to deselect</span>}
+            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap to deselect</span>}
           </p>
-          <div style={{ width: "100%", overflowX: "hidden" }}
-            onClick={(e) => { if (e.target === e.currentTarget) setActiveEl(null); }}>
-            <div style={{
-              transformOrigin: "top left",
-              transform: `scale(${canvasScale})`,
-              width: sz.w,
-              height: sz.h * canvasScale, // collapse extra height after scaling
-              marginBottom: sz.h * canvasScale - sz.h, // compensate
-            }}>
+          {/* Outer container matches scaled canvas size */}
+          <div
+            style={{ width: sz.w * canvasScale, height: sz.h * canvasScale, position: "relative", overflow: "hidden" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setActiveEl(null); }}
+          >
+            {/* Scale wrapper — transforms 600px canvas to fit available width */}
+            <div style={{ transformOrigin: "top left", transform: `scale(${canvasScale})`, width: sz.w, height: sz.h }}>
               <div
                 ref={canvasRef}
                 onClick={(e) => {
@@ -938,17 +1008,52 @@ export default function Home() {
               ))}
             </div>{/* end canvasRef */}
             </div>{/* end scale div */}
-          </div>{/* end outer wrapper */}
+          </div>{/* end outer container */}
           <p style={{ marginTop: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>
             💡 Single tap to select & move · Double tap to edit text · Tap canvas to deselect
           </p>
-        </div>
-      </div>
+        </div>{/* end studio-canvas-wrap */}
+      </div>{/* end studio-layout */}
 
       <Toast msg={toast} />
 
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
+
+        /* Desktop: side by side */
+        .studio-layout {
+          display: flex;
+          gap: 16px;
+          padding: 0 16px 80px;
+          align-items: flex-start;
+        }
+        .studio-panel {
+          width: 220px;
+          min-width: 200px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .studio-canvas-wrap {
+          flex: 1;
+          min-width: 0;
+        }
+
+        /* Mobile: stack vertically */
+        @media (max-width: 768px) {
+          .studio-layout {
+            flex-direction: column;
+            padding: 0 10px 80px;
+            gap: 12px;
+          }
+          .studio-panel {
+            width: 100%;
+          }
+          .studio-canvas-wrap {
+            width: 100%;
+          }
+        }
       `}</style>
     </div>
   );
