@@ -77,6 +77,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       onTouchStart={startDrag}
       onDoubleClick={handleDoubleClick}
       data-canvas-el="text"
+      data-textbox-id={box.id}
       style={{
         position: "absolute",
         left: box.x, top: box.y,
@@ -103,6 +104,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       )}
       <div
         ref={editRef}
+        data-text-content
         contentEditable={editing}
         suppressContentEditableWarning
         onBlur={handleBlur}
@@ -559,14 +561,8 @@ export default function Home() {
   const downloadPNG = async () => {
     setSaving(true);
 
-    // Flush any contentEditable text that hasn't been saved via blur yet
-    const editables = canvasRef.current?.querySelectorAll("[contenteditable=true]");
-    if (editables?.length) {
-      editables.forEach(el => el.blur());
-      await new Promise(r => setTimeout(r, 80));
-    }
-
-    setActiveEl(null);
+    // Flush live DOM text into state before reading for export
+    const liveTextBoxes = flushTextEdits();
     await new Promise(r => setTimeout(r, 150));
 
     try {
@@ -644,7 +640,7 @@ export default function Home() {
         return allLines;
       };
 
-      for (const box of textBoxes) {
+      for (const box of liveTextBoxes) {
         if (!box.text?.trim()) continue;
         ctx.save();
         const font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
@@ -706,18 +702,34 @@ export default function Home() {
     setSaving(false);
   };
 
-  const goToCaptions = () => {
-    // Use first text box content as title for caption generation
-    const firstText = textBoxes[0]?.text || "";
-    const secondText = textBoxes[1]?.text || "";
-    router.push({
-      pathname: "/captions",
-      query: { title: firstText, description: secondText, category: selected.category, id: selected.id }
+  // Read live text from DOM and sync into state — call before any navigation/export
+  const flushTextEdits = () => {
+    const liveBoxes = textBoxes.map(box => {
+      const domEl = canvasRef.current?.querySelector(`[data-textbox-id="${box.id}"] [data-text-content]`);
+      const liveText = domEl ? domEl.innerText : box.text;
+      return liveText !== box.text ? { ...box, text: liveText } : box;
     });
+    setActiveEl(null); // also blurs any active edit
+    setTextBoxes(liveBoxes);
+    return liveBoxes;
+  };
+
+  const goToCaptions = () => {
+    const liveBoxes = flushTextEdits();
+    const firstText = liveBoxes[0]?.text || "";
+    const secondText = liveBoxes[1]?.text || "";
+    // Small delay so state write completes before navigation/localStorage save
+    setTimeout(() => {
+      router.push({
+        pathname: "/captions",
+        query: { title: firstText, description: secondText, category: selected.category, id: selected.id }
+      });
+    }, 50);
   };
 
   const goToPost = () => {
-    router.push("/post");
+    flushTextEdits();
+    setTimeout(() => router.push("/post"), 50);
   };
 
   return (
