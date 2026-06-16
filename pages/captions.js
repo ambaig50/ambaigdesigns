@@ -11,6 +11,22 @@ const PLATFORMS = [
 
 export default function Captions() {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [canvasState, setCanvasState] = useState(null);
+
+  // Wait for router.query to be populated
+  useEffect(() => {
+    if (router.isReady) setReady(true);
+  }, [router.isReady]);
+
+  // Load canvas state for preview
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ambaig_canvas_state");
+      if (saved) setCanvasState(JSON.parse(saved));
+    } catch (e) {}
+  }, []);
+
   const { title, description, category, id } = router.query;
   const [captions, setCaptions]         = useState({ pinterest: "", facebook: "", instagram: "", threads: "" });
   const [loading, setLoading]           = useState(false);
@@ -48,7 +64,7 @@ export default function Captions() {
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (title || description) generate(); }, [title, description]);
+  useEffect(() => { if (ready && (title || description)) generate(); }, [ready, title, description]);
 
   const copyCaption = async (key) => {
     const text = captions[key];
@@ -99,16 +115,29 @@ export default function Captions() {
         {/* ── Left: preview + actions ── */}
         <div style={{ width: 185, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
 
-          {/* Mini canvas preview */}
+          {/* Mini canvas preview — shows actual design from canvas state */}
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Design Preview</p>
           <div style={{ width: 185, height: 277, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff", position: "relative", flexShrink: 0 }}>
-            {TemplateComponent ? (
-              <div style={{ transform: "scale(0.308)", transformOrigin: "top left", width: 600, height: 900, pointerEvents: "none" }}>
-                <TemplateComponent title={title || "Your Title"} description={description || ""} />
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#ccc", fontSize: "0.8rem" }}>No template</div>
-            )}
+            <div style={{ transform: "scale(0.308)", transformOrigin: "top left", width: 600, height: 900, pointerEvents: "none", position: "relative" }}>
+              {/* Background image */}
+              {canvasState?.bg?.src && (
+                <img src={canvasState.bg.src} alt="bg" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${canvasState.bg.ox ?? 50}% ${canvasState.bg.oy ?? 50}%`, opacity: canvasState.bgOpacity ?? 1 }} />
+              )}
+              {/* Template */}
+              {TemplateComponent && (
+                <div style={{ position: "absolute", inset: 0, mixBlendMode: canvasState?.bg ? "multiply" : "normal" }}>
+                  <TemplateComponent title="" description="" />
+                </div>
+              )}
+              {/* Overlay images */}
+              {canvasState?.images?.map(img => (
+                <img key={img.id} src={img.src} alt="" style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h, objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, borderRadius: 4 }} />
+              ))}
+              {/* Text boxes */}
+              {canvasState?.textBoxes?.map(box => (
+                <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
+              ))}
+            </div>
           </div>
           <p style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>{category} · {id}</p>
 
