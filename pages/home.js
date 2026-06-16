@@ -76,6 +76,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
       onMouseDown={startDrag}
       onTouchStart={startDrag}
       onDoubleClick={handleDoubleClick}
+      data-canvas-el="text"
       style={{
         position: "absolute",
         left: box.x, top: box.y,
@@ -192,6 +193,7 @@ function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect })
 
   return (
     <div onMouseDown={startDrag} onTouchStart={startDrag}
+      data-canvas-el="img"
       style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h,
         cursor: mode === "crop" ? "crosshair" : "move",
         outline: selected ? "2px solid #c084fc" : "2px solid transparent",
@@ -692,21 +694,9 @@ export default function Home() {
             })()}
 
             {/* New text defaults */}
-            <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: 8 }}>New text settings:</p>
-            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-              <div style={{ flex: 1 }}>
-                <label className="field-label">Color</label>
-                <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
-                  style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label className="field-label">Size</label>
-                <input type="number" value={fontSize} min={10} max={80} onChange={e => setFontSize(Number(e.target.value))} />
-              </div>
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              <input type="checkbox" checked={textBold} onChange={e => setTextBold(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Bold
-            </label>
+            <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: 8 }}>
+              {activeEl?.type === "text" ? "Add another:" : "Add text to canvas:"}
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }}
                 onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>
@@ -816,7 +806,11 @@ export default function Home() {
             }}>
               <div
                 ref={canvasRef}
-                onClick={(e) => { if (e.target === canvasRef.current) setActiveEl(null); }}
+                onClick={(e) => {
+                  // Deselect if click was not on a draggable element
+                  const isElement = e.target.closest("[data-canvas-el]");
+                  if (!isElement) setActiveEl(null);
+                }}
                 style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}
               >
               {/* 1. Background */}
