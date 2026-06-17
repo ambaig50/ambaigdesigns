@@ -12,7 +12,7 @@ const TEXT_STYLES = {
 };
 
 // ── Draggable text box ───────────────────────────────────────────
-function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
+function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const [editing, setEditing] = useState(false);
   const editRef  = useRef(null);
   const wrapRef  = useRef(null);
@@ -47,17 +47,24 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect }) {
     onSelect();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const s = scale || 1;
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    const offsetX = cx - rect.left - box.x;
-    const offsetY = cy - rect.top - box.y;
+    // Convert screen offset to canvas-space offset by dividing by scale
+    const offsetX = (cx - rect.left) / s - box.x;
+    const offsetY = (cy - rect.top) / s - box.y;
+    // Canvas coordinate space dimensions (not scaled screen rect)
+    const canvasW = rect.width / s;
+    const canvasH = rect.height / s;
     const move = (ev) => {
       ev.preventDefault();
       const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const canvasX = (mx - rect.left) / s;
+      const canvasY = (my - rect.top) / s;
       onUpdate({
-        x: Math.max(0, Math.min(mx - rect.left - offsetX, rect.width - 20)),
-        y: Math.max(0, Math.min(my - rect.top - offsetY, rect.height - 20)),
+        x: Math.max(0, Math.min(canvasX - offsetX, canvasW - 20)),
+        y: Math.max(0, Math.min(canvasY - offsetY, canvasH - 20)),
       });
     };
     const up = () => {
@@ -789,67 +796,100 @@ export default function Home() {
           <div className="card">
             <p className="plabel">Text on Canvas</p>
 
-            {/* If a text box is selected — show its controls */}
-            {activeEl?.type === "text" && (() => {
-              const box = textBoxes.find(b => b.id === activeEl.id);
-              if (!box) return null;
-              const update = (patch) => setTextBoxes(prev => prev.map(b => b.id === box.id ? { ...b, ...patch } : b));
-              return (
-                <div style={{ marginBottom: 12, padding: "10px 12px", background: "var(--accent-glow)", border: "1px solid var(--accent)", borderRadius: 10 }}>
-                  <p style={{ fontSize: "0.7rem", color: "var(--accent)", fontWeight: 700, marginBottom: 8 }}>✏️ Selected text</p>
+            {(() => {
+              const selectedBox = activeEl?.type === "text" ? textBoxes.find(b => b.id === activeEl.id) : null;
+              const isEditingExisting = !!selectedBox;
 
-                  {/* Color + Size */}
+              // Use selected box's values if editing, else the "new text" defaults
+              const curColor = isEditingExisting ? (selectedBox.color || "#ffffff") : textColor;
+              const curSize  = isEditingExisting ? (selectedBox.fontSize || 22) : fontSize;
+              const curAlign = isEditingExisting ? (selectedBox.align || "left") : "left";
+              const curStyle = isEditingExisting ? (selectedBox.style || "shadow") : "shadow";
+              const curBold  = isEditingExisting ? !!selectedBox.bold : textBold;
+
+              const apply = (patch) => {
+                if (isEditingExisting) {
+                  setTextBoxes(prev => prev.map(b => b.id === selectedBox.id ? { ...b, ...patch } : b));
+                } else {
+                  if ("color" in patch) setTextColor(patch.color);
+                  if ("fontSize" in patch) setFontSize(patch.fontSize);
+                  if ("bold" in patch) setTextBold(patch.bold);
+                  // align/style for new text are applied at creation time via these same state vars if you want — kept simple here
+                }
+              };
+
+              return (
+                <div style={{
+                  marginBottom: 12, padding: "10px 12px", borderRadius: 10,
+                  background: isEditingExisting ? "var(--accent-glow)" : "var(--surface2)",
+                  border: isEditingExisting ? "1px solid var(--accent)" : "1px solid var(--border)",
+                }}>
+                  <p style={{ fontSize: "0.7rem", color: isEditingExisting ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>
+                    {isEditingExisting ? "✏️ Editing selected text" : "🎨 New text style"}
+                  </p>
+
+                  {/* Color + Size dropdown */}
                   <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
                       <label className="field-label">Color</label>
-                      <input type="color" value={box.color || "#ffffff"}
-                        onChange={e => update({ color: e.target.value })}
+                      <input type="color" value={curColor}
+                        onChange={e => apply({ color: e.target.value })}
                         style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <label className="field-label">Size</label>
-                      <input type="number" value={box.fontSize || 22} min={10} max={80}
-                        onChange={e => update({ fontSize: Number(e.target.value) })} />
+                      <select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>
+                        {[12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56, 64, 72].map(s => (
+                          <option key={s} value={s}>{s}px</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
-                  {/* Alignment */}
-                  <label className="field-label">Alignment</label>
-                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                    {["left","center","right"].map(a => (
-                      <button key={a} onClick={() => update({ align: a })} style={{
-                        flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
-                        border: box.align === a ? "1px solid var(--accent)" : "1px solid var(--border)",
-                        background: box.align === a ? "var(--accent-glow)" : "transparent",
-                        color: box.align === a ? "var(--accent)" : "var(--text-muted)",
-                        cursor: "pointer",
-                      }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
-                    ))}
-                  </div>
+                  {/* Alignment — only meaningful once a box exists */}
+                  {isEditingExisting && (
+                    <>
+                      <label className="field-label">Alignment</label>
+                      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                        {["left","center","right"].map(a => (
+                          <button key={a} onClick={() => apply({ align: a })} style={{
+                            flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
+                            border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)",
+                            background: curAlign === a ? "var(--accent-glow)" : "transparent",
+                            color: curAlign === a ? "var(--accent)" : "var(--text-muted)",
+                            cursor: "pointer",
+                          }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
+                        ))}
+                      </div>
 
-                  {/* Style */}
-                  <label className="field-label">Style</label>
-                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                    {Object.keys(TEXT_STYLES).map(s => (
-                      <button key={s} onClick={() => update({ style: s })} style={{
-                        flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
-                        border: (box.style || "shadow") === s ? "1px solid var(--accent)" : "1px solid var(--border)",
-                        background: (box.style || "shadow") === s ? "var(--accent-glow)" : "transparent",
-                        color: (box.style || "shadow") === s ? "var(--accent)" : "var(--text-muted)",
-                        cursor: "pointer", textTransform: "capitalize",
-                      }}>{s}</button>
-                    ))}
-                  </div>
+                      <label className="field-label">Style</label>
+                      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                        {Object.keys(TEXT_STYLES).map(s => (
+                          <button key={s} onClick={() => apply({ style: s })} style={{
+                            flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
+                            border: curStyle === s ? "1px solid var(--accent)" : "1px solid var(--border)",
+                            background: curStyle === s ? "var(--accent-glow)" : "transparent",
+                            color: curStyle === s ? "var(--accent)" : "var(--text-muted)",
+                            cursor: "pointer", textTransform: "capitalize",
+                          }}>{s}</button>
+                        ))}
+                      </div>
+                    </>
+                  )}
 
-                  {/* Bold */}
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    <input type="checkbox" checked={!!box.bold} onChange={e => update({ bold: e.target.checked })} style={{ accentColor: "var(--accent)" }} /> Bold
+                    <input type="checkbox" checked={curBold} onChange={e => apply({ bold: e.target.checked })} style={{ accentColor: "var(--accent)" }} /> Bold
                   </label>
+
+                  {!isEditingExisting && (
+                    <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 8 }}>
+                      Tap a text box on canvas to edit its alignment & style.
+                    </p>
+                  )}
                 </div>
               );
             })()}
 
-            {/* New text defaults */}
             <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: 8 }}>
               {activeEl?.type === "text" ? "Add another:" : "Add text to canvas:"}
             </p>
@@ -1012,6 +1052,7 @@ export default function Home() {
               {/* 4. Text boxes */}
               {textBoxes.map(box => (
                 <TextBox key={box.id} box={box} canvasRef={canvasRef}
+                  scale={canvasScale}
                   selected={activeEl?.type === "text" && activeEl.id === box.id}
                   onSelect={() => setActiveEl({ type: "text", id: box.id })}
                   onUpdate={patch => setTextBoxes(prev => prev.map(b => b.id === box.id ? { ...b, ...patch } : b))}
