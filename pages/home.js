@@ -1068,34 +1068,44 @@ export default function Home() {
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
 
-        /* Desktop: panel on top (full width), canvas below (full width) */
+        /* Desktop: panel forms a column extending the sidebar; canvas fills the rest */
         .studio-layout {
           display: flex;
-          flex-direction: column;
+          flex-direction: row;
           gap: 16px;
           padding: 0 16px 80px;
-          align-items: stretch;
+          align-items: flex-start;
         }
         .studio-panel {
-          width: 100%;
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          width: 240px;
+          min-width: 220px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
           gap: 12px;
-          align-items: start;
+          position: sticky;
+          top: 16px;
+          max-height: calc(100vh - 32px);
+          overflow-y: auto;
         }
         .studio-canvas-wrap {
+          flex: 1;
+          min-width: 0;
           width: 100%;
-          max-width: 100%;
         }
 
-        /* Mobile: same column stacking, single column panel */
+        /* Mobile: stack vertically, panel above canvas, full width, not sticky */
         @media (max-width: 768px) {
           .studio-layout {
+            flex-direction: column;
             padding: 0 10px 80px;
             gap: 12px;
           }
           .studio-panel {
-            grid-template-columns: 1fr;
+            width: 100%;
+            position: static;
+            max-height: none;
+            overflow-y: visible;
           }
         }
       `}</style>
