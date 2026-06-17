@@ -414,6 +414,8 @@ export default function Home() {
   const [textColor, setTextColor]   = useState("#ffffff");
   const [fontSize, setFontSize]     = useState(22);
   const [textBold, setTextBold]     = useState(false);
+  const [textAlign, setTextAlign]   = useState("left");
+  const [textStyle, setTextStyle]   = useState("shadow");
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState("");
   const canvasRef  = useRef(null);
@@ -425,23 +427,21 @@ export default function Home() {
   const TemplateComponent = getTemplateComponent(selected.category, selected.id);
   const sz = SIZES[canvasSize];
 
-  // Compute CSS scale so canvas fits available container width
+  // Compute CSS scale so canvas fits available container width — measured live, not guessed
   const [canvasScale, setCanvasScale] = useState(1);
   const canvasWrapRef = useRef(null);
   useEffect(() => {
     const compute = () => {
-      // On mobile: full screen width minus padding
-      // On desktop: remaining space after 220px panel + gaps
-      const isMobile = window.innerWidth <= 768;
-      const available = isMobile
-        ? window.innerWidth - 20
-        : window.innerWidth - 240 - 60; // sidebar(220) + studio panel(220) + gaps
+      const containerWidth = canvasWrapRef.current?.offsetWidth;
+      const available = containerWidth ? containerWidth - 4 : window.innerWidth - 20;
       const scale = Math.min(1, available / sz.w);
       setCanvasScale(scale);
     };
     compute();
+    // Re-measure after layout settles (fonts, images)
+    const t = setTimeout(compute, 100);
     window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
+    return () => { window.removeEventListener("resize", compute); clearTimeout(t); };
   }, [sz.w]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
@@ -551,15 +551,14 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
-  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold) => {
+  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold, align = textAlign, style = textStyle) => {
     const id = Date.now();
     // Always use canvas coordinate space (sz.w/sz.h), never offsetWidth
     setTextBoxes(prev => [...prev, {
       id, text,
       x: 16,
       y: Math.max(30, Math.round(sz.h / 2) - 60),
-      color, fontSize: size, bold,
-      align: "left",
+      color, fontSize: size, bold, align, style,
     }]);
     setActiveEl({ type: "text", id });
   };
@@ -800,11 +799,10 @@ export default function Home() {
               const selectedBox = activeEl?.type === "text" ? textBoxes.find(b => b.id === activeEl.id) : null;
               const isEditingExisting = !!selectedBox;
 
-              // Use selected box's values if editing, else the "new text" defaults
               const curColor = isEditingExisting ? (selectedBox.color || "#ffffff") : textColor;
               const curSize  = isEditingExisting ? (selectedBox.fontSize || 22) : fontSize;
-              const curAlign = isEditingExisting ? (selectedBox.align || "left") : "left";
-              const curStyle = isEditingExisting ? (selectedBox.style || "shadow") : "shadow";
+              const curAlign = isEditingExisting ? (selectedBox.align || "left") : textAlign;
+              const curStyle = isEditingExisting ? (selectedBox.style || "shadow") : textStyle;
               const curBold  = isEditingExisting ? !!selectedBox.bold : textBold;
 
               const apply = (patch) => {
@@ -814,7 +812,8 @@ export default function Home() {
                   if ("color" in patch) setTextColor(patch.color);
                   if ("fontSize" in patch) setFontSize(patch.fontSize);
                   if ("bold" in patch) setTextBold(patch.bold);
-                  // align/style for new text are applied at creation time via these same state vars if you want — kept simple here
+                  if ("align" in patch) setTextAlign(patch.align);
+                  if ("style" in patch) setTextStyle(patch.style);
                 }
               };
 
@@ -825,10 +824,10 @@ export default function Home() {
                   border: isEditingExisting ? "1px solid var(--accent)" : "1px solid var(--border)",
                 }}>
                   <p style={{ fontSize: "0.7rem", color: isEditingExisting ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>
-                    {isEditingExisting ? "✏️ Editing selected text" : "🎨 New text style"}
+                    {isEditingExisting ? "✏️ Editing selected text" : "🎨 Text style (applies to next added text)"}
                   </p>
 
-                  {/* Color + Size dropdown */}
+                  {/* Color + Size — always shown */}
                   <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
                       <label className="field-label">Color</label>
@@ -846,46 +845,42 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Alignment — only meaningful once a box exists */}
-                  {isEditingExisting && (
-                    <>
-                      <label className="field-label">Alignment</label>
-                      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                        {["left","center","right"].map(a => (
-                          <button key={a} onClick={() => apply({ align: a })} style={{
-                            flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
-                            border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)",
-                            background: curAlign === a ? "var(--accent-glow)" : "transparent",
-                            color: curAlign === a ? "var(--accent)" : "var(--text-muted)",
-                            cursor: "pointer",
-                          }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
-                        ))}
-                      </div>
+                  {/* Alignment — always shown */}
+                  <label className="field-label">Alignment</label>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                    {["left","center","right"].map(a => (
+                      <button key={a} onClick={() => apply({ align: a })} style={{
+                        flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
+                        border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        background: curAlign === a ? "var(--accent-glow)" : "transparent",
+                        color: curAlign === a ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer",
+                      }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
+                    ))}
+                  </div>
 
-                      <label className="field-label">Style</label>
-                      <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                        {Object.keys(TEXT_STYLES).map(s => (
-                          <button key={s} onClick={() => apply({ style: s })} style={{
-                            flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
-                            border: curStyle === s ? "1px solid var(--accent)" : "1px solid var(--border)",
-                            background: curStyle === s ? "var(--accent-glow)" : "transparent",
-                            color: curStyle === s ? "var(--accent)" : "var(--text-muted)",
-                            cursor: "pointer", textTransform: "capitalize",
-                          }}>{s}</button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                  {/* Style — always shown */}
+                  <label className="field-label">Style</label>
+                  <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                    {Object.keys(TEXT_STYLES).map(s => (
+                      <button key={s} onClick={() => apply({ style: s })} style={{
+                        flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
+                        border: curStyle === s ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        background: curStyle === s ? "var(--accent-glow)" : "transparent",
+                        color: curStyle === s ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer", textTransform: "capitalize",
+                      }}>{s}</button>
+                    ))}
+                  </div>
 
+                  {/* Bold — always shown */}
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
                     <input type="checkbox" checked={curBold} onChange={e => apply({ bold: e.target.checked })} style={{ accentColor: "var(--accent)" }} /> Bold
                   </label>
 
-                  {!isEditingExisting && (
-                    <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 8 }}>
-                      Tap a text box on canvas to edit its alignment & style.
-                    </p>
-                  )}
+                  <p style={{ fontSize: "0.63rem", color: "var(--text-dim)", marginTop: 8 }}>
+                    {isEditingExisting ? "Changes apply to the selected text." : "Tap any text on canvas to edit it directly — these settings apply to new text."}
+                  </p>
                 </div>
               );
             })()}
@@ -895,15 +890,15 @@ export default function Home() {
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>
+                onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true, textAlign, textStyle)}>
                 + Add Title
               </button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false)}>
+                onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false, textAlign, textStyle)}>
                 + Add Description
               </button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Your text here", textColor, fontSize, textBold)}>
+                onClick={() => addTextBox("Your text here", textColor, fontSize, textBold, textAlign, textStyle)}>
                 + Add Text Box
               </button>
             </div>
@@ -997,7 +992,7 @@ export default function Home() {
         </div>{/* end panel */}
 
         {/* ── Canvas ── */}
-        <div className="studio-canvas-wrap">
+        <div className="studio-canvas-wrap" ref={canvasWrapRef}>
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
             Canvas — {sz.w}×{sz.h}px
             {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap to deselect</span>}
@@ -1073,38 +1068,34 @@ export default function Home() {
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
 
-        /* Desktop: side by side */
+        /* Desktop: panel on top (full width), canvas below (full width) */
         .studio-layout {
           display: flex;
+          flex-direction: column;
           gap: 16px;
           padding: 0 16px 80px;
-          align-items: flex-start;
+          align-items: stretch;
         }
         .studio-panel {
-          width: 220px;
-          min-width: 200px;
-          flex-shrink: 0;
-          display: flex;
-          flex-direction: column;
+          width: 100%;
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
           gap: 12px;
+          align-items: start;
         }
         .studio-canvas-wrap {
-          flex: 1;
-          min-width: 0;
+          width: 100%;
+          max-width: 100%;
         }
 
-        /* Mobile: stack vertically */
+        /* Mobile: same column stacking, single column panel */
         @media (max-width: 768px) {
           .studio-layout {
-            flex-direction: column;
             padding: 0 10px 80px;
             gap: 12px;
           }
           .studio-panel {
-            width: 100%;
-          }
-          .studio-canvas-wrap {
-            width: 100%;
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
