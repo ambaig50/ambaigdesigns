@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { getTemplateRegistry } from "../utils/loadTemplates";
-import { getTemplateComponent } from "../utils/templateComponents";
 import { useRouter } from "next/router";
 
 // ── Text styles ──────────────────────────────────────────────────
@@ -403,8 +401,6 @@ const SIZES = {
 export default function Home() {
   const [title, setTitle]           = useState("");
   const [description, setDesc]      = useState("");
-  const [selected, setSelected]     = useState({ category: "minimalist", id: "boldcentered" });
-  const [showTemplate, setShowTemplate] = useState(true);
   const [canvasSize, setCanvasSize] = useState("portrait");
   const [bg, setBg]                 = useState(null);
   const [bgOpacity, setBgOpacity]   = useState(1);
@@ -423,8 +419,6 @@ export default function Home() {
   const bgFileRef  = useRef(null);
   const router     = useRouter();
 
-  const registry = getTemplateRegistry();
-  const TemplateComponent = getTemplateComponent(selected.category, selected.id);
   const sz = SIZES[canvasSize];
 
   // Compute CSS scale so canvas fits available container width — measured live, not guessed
@@ -457,8 +451,6 @@ export default function Home() {
         if (state.bg) setBg(state.bg);
         if (state.bgOpacity) setBgOpacity(state.bgOpacity);
         if (state.canvasSize) setCanvasSize(state.canvasSize);
-        if (state.showTemplate !== undefined) setShowTemplate(state.showTemplate);
-        if (state.selected) setSelected(state.selected);
       } catch (e) {}
     }
   }, []);
@@ -467,10 +459,10 @@ export default function Home() {
   useEffect(() => {
     try {
       localStorage.setItem("ambaig_canvas_state", JSON.stringify({
-        textBoxes, images, bg, bgOpacity, canvasSize, showTemplate, selected,
+        textBoxes, images, bg, bgOpacity, canvasSize,
       }));
     } catch (e) {}
-  }, [textBoxes, images, bg, bgOpacity, canvasSize, showTemplate, selected]);
+  }, [textBoxes, images, bg, bgOpacity, canvasSize]);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -728,7 +720,7 @@ export default function Home() {
     setTimeout(() => {
       router.push({
         pathname: "/captions",
-        query: { title: firstText, description: secondText, category: selected.category, id: selected.id }
+        query: { title: firstText, description: secondText }
       });
     }, 50);
   };
@@ -767,28 +759,6 @@ export default function Home() {
                 <span style={{ opacity: 0.7, fontSize: "0.7rem" }}>{val.label}</span>
               </button>
             ))}
-          </div>
-
-          {/* Template */}
-          <div className="card">
-            <p className="plabel">Template</p>
-            <label style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10, cursor: "pointer", fontSize: "0.82rem", color: "var(--text-muted)" }}>
-              <input type="checkbox" checked={showTemplate} onChange={e => setShowTemplate(e.target.checked)} style={{ accentColor: "var(--accent)" }} /> Show template
-            </label>
-            {showTemplate && <>
-              <div style={{ marginBottom: 7 }}>
-                <label className="field-label">Category</label>
-                <select value={selected.category} onChange={e => setSelected({ category: e.target.value, id: registry[e.target.value][0].id })}>
-                  {Object.keys(registry).map(cat => <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>)}
-                </select>
-              </div>
-              <div style={{ marginBottom: 4 }}>
-                <label className="field-label">Style</label>
-                <select value={selected.id} onChange={e => setSelected(s => ({ ...s, id: e.target.value }))}>
-                  {registry[selected.category].map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-            </>}
           </div>
 
           {/* Text on canvas */}
@@ -979,7 +949,6 @@ export default function Home() {
               setBgOpacity(1);
               setActiveEl(null);
               setCanvasSize("portrait");
-              setShowTemplate(false);
               localStorage.removeItem("ambaig_canvas_state");
               setToast("✅ Canvas cleared — ready for new design");
               setTimeout(() => setToast(""), 2500);
@@ -1020,17 +989,6 @@ export default function Home() {
                   opacity={bgOpacity}
                   onPan={(ox, oy) => setBg(b => ({ ...b, ox, oy }))}
                 />
-              )}
-
-              {/* 2. Template — mix-blend-mode strips white bg when photo is set */}
-              {showTemplate && TemplateComponent && (
-                <div style={{
-                  position: "absolute", inset: 0, zIndex: 5,
-                  pointerEvents: "none",
-                  mixBlendMode: bg ? "multiply" : "normal",
-                }}>
-                  <TemplateComponent title="" description="" />
-                </div>
               )}
 
               {/* 3. Overlay images */}
