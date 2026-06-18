@@ -43,32 +43,20 @@ export default function PostManager() {
   const [title, setTitle] = useState("");
 
   useEffect(() => {
-    if (!router.isReady) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem("ambaig_last_captions") || "null");
+      if (saved) {
+        setCaptions({
+          pinterest: saved.pinterest || "",
+          facebook: saved.facebook || "",
+          instagram: saved.instagram || "",
+          threads: saved.threads || "",
+        });
+        setTitle(saved.title || "");
+      }
+    } catch (e) {}
     setReady(true);
-    const { pinterest, facebook, instagram, threads, title: t } = router.query;
-
-    // Prefer query params if present, otherwise fall back to last-saved captions
-    const fromQuery = { pinterest, facebook, instagram, threads };
-    const hasQueryData = Object.values(fromQuery).some(Boolean);
-
-    if (hasQueryData) {
-      setCaptions(fromQuery);
-      setTitle(t || "");
-      // Persist as fallback for next visit
-      try {
-        localStorage.setItem("ambaig_last_captions", JSON.stringify({ ...fromQuery, title: t || "" }));
-      } catch (e) {}
-    } else {
-      // Query was empty (e.g. revisited page) — restore from localStorage
-      try {
-        const saved = JSON.parse(localStorage.getItem("ambaig_last_captions") || "null");
-        if (saved) {
-          setCaptions({ pinterest: saved.pinterest, facebook: saved.facebook, instagram: saved.instagram, threads: saved.threads });
-          setTitle(saved.title || "");
-        }
-      } catch (e) {}
-    }
-  }, [router.isReady, router.query]);
+  }, []);
 
   const [history, setHistory]   = useState([]);
   const [copied, setCopied]     = useState({});
@@ -207,7 +195,7 @@ export default function PostManager() {
           </div>
         ))}
 
-        <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => router.back()}>
+        <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => router.push("/captions")}>
           ← Back to Captions
         </button>
 
