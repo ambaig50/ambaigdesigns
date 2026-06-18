@@ -38,10 +38,38 @@ const PLATFORMS = [
 
 export default function PostManager() {
   const router = useRouter();
-  const { pinterest, facebook, instagram, threads, title } = router.query;
-  const captions = { pinterest, facebook, instagram, threads };
+  const [ready, setReady] = useState(false);
+  const [captions, setCaptions] = useState({ pinterest: "", facebook: "", instagram: "", threads: "" });
+  const [title, setTitle] = useState("");
 
-  const [checked, setChecked]   = useState({});
+  useEffect(() => {
+    if (!router.isReady) return;
+    setReady(true);
+    const { pinterest, facebook, instagram, threads, title: t } = router.query;
+
+    // Prefer query params if present, otherwise fall back to last-saved captions
+    const fromQuery = { pinterest, facebook, instagram, threads };
+    const hasQueryData = Object.values(fromQuery).some(Boolean);
+
+    if (hasQueryData) {
+      setCaptions(fromQuery);
+      setTitle(t || "");
+      // Persist as fallback for next visit
+      try {
+        localStorage.setItem("ambaig_last_captions", JSON.stringify({ ...fromQuery, title: t || "" }));
+      } catch (e) {}
+    } else {
+      // Query was empty (e.g. revisited page) — restore from localStorage
+      try {
+        const saved = JSON.parse(localStorage.getItem("ambaig_last_captions") || "null");
+        if (saved) {
+          setCaptions({ pinterest: saved.pinterest, facebook: saved.facebook, instagram: saved.instagram, threads: saved.threads });
+          setTitle(saved.title || "");
+        }
+      } catch (e) {}
+    }
+  }, [router.isReady, router.query]);
+
   const [history, setHistory]   = useState([]);
   const [copied, setCopied]     = useState({});
   const [toast, setToast]       = useState(null);
@@ -86,34 +114,17 @@ export default function PostManager() {
     }
     // Copy caption after opening (doesn't need to block the navigation)
     copyText(platform.key);
-  };
 
-  const postSelected = () => {
-    const selected = PLATFORMS.filter(p => checked[p.key]);
-    if (!selected.length) return showToast("Select at least one platform.");
-
-    let blockedCount = 0;
-    selected.forEach(p => {
-      const caption = captions[p.key] || "";
-      const win = window.open(p.openUrl(caption), "_blank");
-      if (!win) blockedCount++;
-    });
-
-    if (blockedCount > 0) {
-      showToast(`⚠️ ${blockedCount} pop-up(s) blocked. Allow pop-ups and try again, or open platforms one at a time.`);
-      return;
-    }
-
+    // Log to history
     const entry = {
       id: Date.now(),
       date: new Date().toLocaleString(),
       title: title || "Untitled",
-      platforms: selected.map(p => p.label),
+      platforms: [platform.label],
     };
     const updated = [entry, ...history];
     setHistory(updated);
-    localStorage.setItem("ambaig_post_history", JSON.stringify(updated.slice(0, 50)));
-    showToast("Opened all selected platforms! 🚀");
+    try { localStorage.setItem("ambaig_post_history", JSON.stringify(updated.slice(0, 50))); } catch (e) {}
   };
 
   const clearHistory = () => {
@@ -125,7 +136,7 @@ export default function PostManager() {
     <div>
       <div className="page-header">
         <h1>Post Manager</h1>
-        <p>Copy captions and open each platform to post your design.</p>
+        <p>Post to each platform one at a time — tap Open & Post when ready.</p>
       </div>
 
       <div style={{ padding: "0 20px 40px", display: "grid", gap: 16, maxWidth: 700 }}>
@@ -134,26 +145,17 @@ export default function PostManager() {
         <div style={{ background: "rgba(192,132,252,0.07)", border: "1px solid rgba(192,132,252,0.2)", borderRadius: 12, padding: "14px 18px" }}>
           <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--accent)", marginBottom: 4 }}>How to post</p>
           <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Tap <strong>Open &amp; Post</strong> on any platform — it copies your caption to the clipboard and opens that platform in a new tab. 
+            Tap <strong>Open &amp; Post</strong> on a platform — it copies that caption to your clipboard and opens the platform in a new tab. 
             Paste the caption there and upload your downloaded design image. 
-            Check the platforms you want, then use <strong>Post to All Selected</strong> to open them all at once.
+            Post to platforms one at a time for the most reliable experience.
           </p>
         </div>
 
         {/* Platform cards */}
         {PLATFORMS.map((p) => (
-          <div key={p.key} className="card" style={{
-            border: checked[p.key] ? "1px solid var(--accent)" : "1px solid var(--border)",
-            background: checked[p.key] ? "var(--accent-glow)" : "var(--surface)",
-          }}>
+          <div key={p.key} className="card" style={{ border: "1px solid var(--border)" }}>
             {/* Top row */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: captions[p.key] ? 10 : 0 }}>
-              <input
-                type="checkbox"
-                checked={!!checked[p.key]}
-                onChange={() => setChecked(prev => ({ ...prev, [p.key]: !prev[p.key] }))}
-                style={{ width: 17, height: 17, cursor: "pointer", accentColor: "var(--accent)" }}
-              />
               <span style={{ fontSize: "1.1rem" }}>{p.icon}</span>
               <span style={{ fontWeight: 700, color: p.color, flex: 1 }}>{p.label}</span>
 
@@ -191,15 +193,6 @@ export default function PostManager() {
             )}
           </div>
         ))}
-
-        {/* Post all button */}
-        <button
-          className="btn btn-primary"
-          style={{ justifyContent: "center", padding: "12px" }}
-          onClick={postSelected}
-        >
-          🚀 Post to All Selected Platforms
-        </button>
 
         <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => router.back()}>
           ← Back to Captions
