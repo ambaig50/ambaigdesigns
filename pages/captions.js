@@ -100,6 +100,13 @@ export default function Captions() {
     router.push("/home");
   };
 
+  const goToPost = () => {
+    try {
+      localStorage.setItem("ambaig_last_captions", JSON.stringify({ ...captions, title }));
+    } catch (e) {}
+    router.push("/post");
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -140,7 +147,7 @@ export default function Captions() {
               className="btn btn-primary"
               disabled={!generated || loading}
               style={{ justifyContent: "center", fontSize: "0.82rem" }}
-              onClick={() => router.push({ pathname: "/post", query: { ...captions, title, description } })}
+              onClick={goToPost}
             >
               📤 Go to Post →
             </button>
@@ -234,7 +241,7 @@ export default function Captions() {
               className="btn btn-primary"
               disabled={!generated || loading}
               style={{ flex: 1, justifyContent: "center" }}
-              onClick={() => router.push({ pathname: "/post", query: { ...captions, title, description } })}
+              onClick={goToPost}
             >
               📤 Go to Post →
             </button>
