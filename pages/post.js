@@ -41,7 +41,7 @@ export default function PostManager() {
   const { pinterest, facebook, instagram, threads, title } = router.query;
   const captions = { pinterest, facebook, instagram, threads };
 
-  const [checked, setChecked]   = useState({ pinterest: true, facebook: true, instagram: true, threads: true });
+  const [checked, setChecked]   = useState({});
   const [history, setHistory]   = useState([]);
   const [copied, setCopied]     = useState({});
   const [toast, setToast]       = useState(null);
@@ -76,21 +76,33 @@ export default function PostManager() {
   };
 
   const openPlatform = (platform) => {
-    const p = PLATFORMS.find(x => x.key === platform.key);
     const caption = captions[platform.key] || "";
-    // Copy caption first, then open
+    // Open window FIRST and synchronously — mobile browsers block window.open
+    // if it's not called directly inside the click handler (e.g. after a delay or async copy)
+    const win = window.open(platform.openUrl(caption), "_blank");
+    if (!win) {
+      showToast("⚠️ Pop-up blocked — allow pop-ups for this site, then try again.");
+      return;
+    }
+    // Copy caption after opening (doesn't need to block the navigation)
     copyText(platform.key);
-    setTimeout(() => window.open(p.openUrl(caption), "_blank"), 300);
   };
 
   const postSelected = () => {
     const selected = PLATFORMS.filter(p => checked[p.key]);
     if (!selected.length) return showToast("Select at least one platform.");
 
+    let blockedCount = 0;
     selected.forEach(p => {
       const caption = captions[p.key] || "";
-      window.open(p.openUrl(caption), "_blank");
+      const win = window.open(p.openUrl(caption), "_blank");
+      if (!win) blockedCount++;
     });
+
+    if (blockedCount > 0) {
+      showToast(`⚠️ ${blockedCount} pop-up(s) blocked. Allow pop-ups and try again, or open platforms one at a time.`);
+      return;
+    }
 
     const entry = {
       id: Date.now(),
@@ -122,9 +134,9 @@ export default function PostManager() {
         <div style={{ background: "rgba(192,132,252,0.07)", border: "1px solid rgba(192,132,252,0.2)", borderRadius: 12, padding: "14px 18px" }}>
           <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--accent)", marginBottom: 4 }}>How to post</p>
           <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
-            Click <strong>Open &amp; Post</strong> on any platform — it copies your caption and opens that platform. 
-            Paste the caption and upload your saved design image. 
-            Or click <strong>Post to All Selected</strong> to open all at once.
+            Tap <strong>Open &amp; Post</strong> on any platform — it copies your caption to the clipboard and opens that platform in a new tab. 
+            Paste the caption there and upload your downloaded design image. 
+            Check the platforms you want, then use <strong>Post to All Selected</strong> to open them all at once.
           </p>
         </div>
 
@@ -145,37 +157,21 @@ export default function PostManager() {
               <span style={{ fontSize: "1.1rem" }}>{p.icon}</span>
               <span style={{ fontWeight: 700, color: p.color, flex: 1 }}>{p.label}</span>
 
-              {/* Copy button */}
-              <button
-                onClick={() => copyText(p.key)}
-                disabled={!captions[p.key]}
-                style={{
-                  padding: "5px 11px", borderRadius: 7,
-                  border: "1px solid var(--border)",
-                  background: copied[p.key] ? "#34d39920" : "transparent",
-                  color: copied[p.key] ? "#34d399" : "var(--text-muted)",
-                  fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
-                  transition: "all 0.2s", whiteSpace: "nowrap",
-                }}
-              >
-                {copied[p.key] ? "✅ Copied" : "📋 Copy"}
-              </button>
-
-              {/* Open & Post button */}
+              {/* Open & Post button — copies caption + opens platform in one tap */}
               <button
                 onClick={() => openPlatform(p)}
                 disabled={!captions[p.key]}
                 style={{
-                  padding: "5px 11px", borderRadius: 7,
+                  padding: "6px 14px", borderRadius: 7,
                   background: p.color,
                   border: "none",
                   color: "white",
-                  fontSize: "0.78rem", fontWeight: 700, cursor: "pointer",
+                  fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
                   whiteSpace: "nowrap",
                   opacity: captions[p.key] ? 1 : 0.4,
                 }}
               >
-                Open & Post ↗
+                {copied[p.key] ? "✅ Opened" : "Open & Post ↗"}
               </button>
             </div>
 
