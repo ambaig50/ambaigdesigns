@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { getTemplateComponent } from "../utils/templateComponents";
 
 const PLATFORMS = [
   { key: "pinterest", icon: "📌", label: "Pinterest", color: "#e60023" },
@@ -27,15 +26,13 @@ export default function Captions() {
     } catch (e) {}
   }, []);
 
-  const { title, description, category, id } = router.query;
+  const { title, description } = router.query;
   const [captions, setCaptions]         = useState({ pinterest: "", facebook: "", instagram: "", threads: "" });
   const [loading, setLoading]           = useState(false);
   const [generated, setGenerated]       = useState(false);
   const [copied, setCopied]             = useState({});
   const [addedToCanvas, setAddedToCanvas] = useState({});
   const [toast, setToast]               = useState("");
-
-  const TemplateComponent = category && id ? getTemplateComponent(category, id) : null;
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
@@ -123,12 +120,6 @@ export default function Captions() {
               {canvasState?.bg?.src && (
                 <img src={canvasState.bg.src} alt="bg" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${canvasState.bg.ox ?? 50}% ${canvasState.bg.oy ?? 50}%`, opacity: canvasState.bgOpacity ?? 1 }} />
               )}
-              {/* Template */}
-              {TemplateComponent && (
-                <div style={{ position: "absolute", inset: 0, mixBlendMode: canvasState?.bg ? "multiply" : "normal" }}>
-                  <TemplateComponent title="" description="" />
-                </div>
-              )}
               {/* Overlay images */}
               {canvasState?.images?.map(img => (
                 <img key={img.id} src={img.src} alt="" style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h, objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, borderRadius: 4 }} />
@@ -139,7 +130,6 @@ export default function Captions() {
               ))}
             </div>
           </div>
-          <p style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>{category} · {id}</p>
 
           {/* Action buttons always visible */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
@@ -150,7 +140,7 @@ export default function Captions() {
               className="btn btn-primary"
               disabled={!generated || loading}
               style={{ justifyContent: "center", fontSize: "0.82rem" }}
-              onClick={() => router.push({ pathname: "/post", query: { ...captions, category, id, title, description } })}
+              onClick={() => router.push({ pathname: "/post", query: { ...captions, title, description } })}
             >
               📤 Go to Post →
             </button>
@@ -244,7 +234,7 @@ export default function Captions() {
               className="btn btn-primary"
               disabled={!generated || loading}
               style={{ flex: 1, justifyContent: "center" }}
-              onClick={() => router.push({ pathname: "/post", query: { ...captions, category, id, title, description } })}
+              onClick={() => router.push({ pathname: "/post", query: { ...captions, title, description } })}
             >
               📤 Go to Post →
             </button>
