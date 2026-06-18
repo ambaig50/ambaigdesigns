@@ -141,6 +141,19 @@ export default function PostManager() {
 
       <div style={{ padding: "0 20px 40px", display: "grid", gap: 16, maxWidth: 700 }}>
 
+        {/* No captions warning */}
+        {ready && !Object.values(captions).some(Boolean) && (
+          <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 12, padding: "14px 18px" }}>
+            <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--danger)", marginBottom: 4 }}>⚠️ No captions found</p>
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+              The buttons below are disabled because there's no caption to post yet. Go generate captions for your design first.
+            </p>
+            <button className="btn btn-primary" style={{ fontSize: "0.8rem" }} onClick={() => router.push("/captions")}>
+              ✨ Generate Captions
+            </button>
+          </div>
+        )}
+
         {/* Info notice */}
         <div style={{ background: "rgba(192,132,252,0.07)", border: "1px solid rgba(192,132,252,0.2)", borderRadius: 12, padding: "14px 18px" }}>
           <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--accent)", marginBottom: 4 }}>How to post</p>
