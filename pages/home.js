@@ -727,22 +727,7 @@ export default function Home() {
 
   const goToPost = () => {
     flushTextEdits();
-    setTimeout(() => {
-      // Posting needs captions — check if any were already generated this session
-      let hasCaptions = false;
-      try {
-        const saved = JSON.parse(localStorage.getItem("ambaig_last_captions") || "null");
-        hasCaptions = saved && Object.values(saved).some(v => v && v !== saved.title);
-      } catch (e) {}
-
-      if (hasCaptions) {
-        router.push("/post");
-      } else {
-        setToast("Generate captions first so you have something to post!");
-        setTimeout(() => setToast(""), 3000);
-        router.push({ pathname: "/captions", query: {} });
-      }
-    }, 50);
+    setTimeout(() => router.push("/post"), 50);
   };
 
   return (
