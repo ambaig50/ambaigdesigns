@@ -121,22 +121,42 @@ export default function Captions() {
 
           {/* Mini canvas preview — shows actual design from canvas state */}
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Design Preview</p>
-          <div style={{ width: 185, height: 277, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff", position: "relative", flexShrink: 0 }}>
-            <div style={{ transform: "scale(0.308)", transformOrigin: "top left", width: 600, height: 900, pointerEvents: "none", position: "relative" }}>
-              {/* Background image */}
-              {canvasState?.bg?.src && (
-                <img src={canvasState.bg.src} alt="bg" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${canvasState.bg.ox ?? 50}% ${canvasState.bg.oy ?? 50}%`, opacity: canvasState.bgOpacity ?? 1 }} />
-              )}
-              {/* Overlay images */}
-              {canvasState?.images?.map(img => (
-                <img key={img.id} src={img.src} alt="" style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h, objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, borderRadius: 4 }} />
-              ))}
-              {/* Text boxes */}
-              {canvasState?.textBoxes?.map(box => (
-                <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
-              ))}
-            </div>
-          </div>
+          {(() => {
+            const SIZES = {
+              portrait:  { w: 600, h: 900 },
+              square:    { w: 600, h: 600 },
+              landscape: { w: 800, h: 450 },
+            };
+            const sz = SIZES[canvasState?.canvasSize] || SIZES.portrait;
+            const previewW = 185;
+            const scale = previewW / sz.w;
+            const previewH = sz.h * scale;
+
+            return (
+              <div style={{ width: previewW, height: previewH, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff", position: "relative", flexShrink: 0 }}>
+                <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", width: sz.w, height: sz.h, pointerEvents: "none", position: "relative" }}>
+                  {/* Background image */}
+                  {canvasState?.bg?.type === "photo" && canvasState.bg.src && (
+                    <img src={canvasState.bg.src} alt="bg" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: `${canvasState.bg.ox ?? 50}% ${canvasState.bg.oy ?? 50}%`, opacity: canvasState.bgOpacity ?? 1 }} />
+                  )}
+                  {canvasState?.bg?.type === "color" && (
+                    <div style={{ position: "absolute", inset: 0, background: canvasState.bg.color }} />
+                  )}
+                  {canvasState?.bg?.type === "gradient" && (
+                    <div style={{ position: "absolute", inset: 0, background: `linear-gradient(${canvasState.bg.angle}deg, ${canvasState.bg.from}, ${canvasState.bg.to})` }} />
+                  )}
+                  {/* Overlay images */}
+                  {canvasState?.images?.map(img => (
+                    <img key={img.id} src={img.src} alt="" style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h, objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, borderRadius: 4 }} />
+                  ))}
+                  {/* Text boxes */}
+                  {canvasState?.textBoxes?.map(box => (
+                    <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Action buttons always visible */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
