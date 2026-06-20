@@ -452,6 +452,12 @@ export default function Home() {
         if (state.bgOpacity) setBgOpacity(state.bgOpacity);
         if (state.canvasSize) setCanvasSize(state.canvasSize);
       } catch (e) {}
+    } else {
+      // No saved design yet — apply user's default size preference
+      try {
+        const prefs = JSON.parse(localStorage.getItem("ambaig_prefs") || "{}");
+        if (prefs.defaultSize) setCanvasSize(prefs.defaultSize);
+      } catch (e) {}
     }
   }, []);
 
