@@ -5,7 +5,6 @@ const NAV = [
   { href: "/home",      icon: "🎨", label: "Studio"   },
   { href: "/captions",  icon: "✨", label: "Captions" },
   { href: "/post",      icon: "📤", label: "Post"     },
-  { href: "/analytics", icon: "📊", label: "Analytics"},
   { href: "/settings",  icon: "⚙️",  label: "Settings" },
 ];
 
