@@ -403,6 +403,7 @@ export default function Home() {
   const [description, setDesc]      = useState("");
   const [canvasSize, setCanvasSize] = useState("portrait");
   const [bg, setBg]                 = useState(null);
+  const [bgTab, setBgTab]           = useState("photo");
   const [bgOpacity, setBgOpacity]   = useState(1);
   const [images, setImages]         = useState([]);
   const [textBoxes, setTextBoxes]   = useState([]);
@@ -510,7 +511,8 @@ export default function Home() {
     reader.onload = (ev) => {
       const src = ev.target.result;
       if (src) {
-        setBg({ src, ox: 50, oy: 50 });
+        setBg({ type: "photo", src, ox: 50, oy: 50 });
+        setBgTab("photo");
       } else {
         setToast("⚠️ Could not load image. Try a different file.");
         setTimeout(() => setToast(""), 3000);
@@ -576,12 +578,12 @@ export default function Home() {
       const ctx = canvas.getContext("2d");
       ctx.scale(2, 2);
 
-      // 1. White background
+      // 1. White base background
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, sz.w, sz.h);
 
-      // 2. Draw background image if set
-      if (bg?.src) {
+      // 2. Draw background — photo, solid color, or gradient
+      if (bg?.type === "photo" && bg.src) {
         await new Promise((res) => {
           const img = new window.Image();
           img.onload = () => {
@@ -599,6 +601,23 @@ export default function Home() {
           img.onerror = res;
           img.src = bg.src;
         });
+      } else if (bg?.type === "color") {
+        ctx.fillStyle = bg.color;
+        ctx.fillRect(0, 0, sz.w, sz.h);
+      } else if (bg?.type === "gradient") {
+        // Convert CSS angle to canvas gradient coordinates
+        const angleRad = ((bg.angle - 90) * Math.PI) / 180;
+        const cx = sz.w / 2, cy = sz.h / 2;
+        const len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
+        const x0 = cx - Math.cos(angleRad) * len;
+        const y0 = cy - Math.sin(angleRad) * len;
+        const x1 = cx + Math.cos(angleRad) * len;
+        const y1 = cy + Math.sin(angleRad) * len;
+        const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+        grad.addColorStop(0, bg.from);
+        grad.addColorStop(1, bg.to);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, sz.w, sz.h);
       }
 
       // 3. Draw overlay images
@@ -882,45 +901,135 @@ export default function Home() {
 
           {/* Background */}
           <div className="card">
-            <p className="plabel">Background Photo</p>
+            <p className="plabel">Background</p>
             <input type="file" accept="image/*" ref={bgFileRef} style={{ display: "none" }} onChange={addBg} />
-            {bg ? (
-              <div>
-                {/* Thumbnail */}
-                <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 10, border: "1px solid var(--border)" }}>
-                  <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: bgOpacity }} />
+
+            {/* Type tabs */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+              {[
+                { key: "photo", label: "📷 Photo" },
+                { key: "color", label: "🎨 Color" },
+                { key: "gradient", label: "🌈 Gradient" },
+              ].map(t => (
+                <button key={t.key}
+                  onClick={() => setBgTab(t.key)}
+                  style={{
+                    flex: 1, padding: "6px 4px", borderRadius: 7, fontSize: "0.7rem", fontWeight: 600,
+                    border: bgTab === t.key ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    background: bgTab === t.key ? "var(--accent-glow)" : "transparent",
+                    color: bgTab === t.key ? "var(--accent)" : "var(--text-muted)",
+                    cursor: "pointer",
+                  }}
+                >{t.label}</button>
+              ))}
+            </div>
+
+            {/* PHOTO tab */}
+            {bgTab === "photo" && (
+              bg?.type === "photo" ? (
+                <div>
+                  <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 10, border: "1px solid var(--border)" }}>
+                    <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: bgOpacity }} />
+                  </div>
+                  <label className="field-label">Opacity — {Math.round(bgOpacity * 100)}%</label>
+                  <input type="range" min="0.1" max="1" step="0.05" value={bgOpacity}
+                    onChange={e => setBgOpacity(Number(e.target.value))}
+                    style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }} />
+                  <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: "0.78rem" }}
+                    onClick={() => bgFileRef.current?.click()}>
+                    🖼 Change Photo
+                  </button>
+                  <button onClick={() => { setBg(null); setBgOpacity(1); }}
+                    style={{ width: "100%", marginTop: 6, padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
+                    Remove background
+                  </button>
+                  <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 6 }}>Drag image on canvas to pan.</p>
                 </div>
+              ) : (
+                <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => bgFileRef.current?.click()}>
+                  🖼 Upload Photo
+                </button>
+              )
+            )}
 
-                {/* Opacity slider */}
-                <label className="field-label">Opacity — {Math.round(bgOpacity * 100)}%</label>
-                <input
-                  type="range" min="0.1" max="1" step="0.05"
-                  value={bgOpacity}
-                  onChange={e => setBgOpacity(Number(e.target.value))}
-                  style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }}
+            {/* COLOR tab */}
+            {bgTab === "color" && (
+              <div>
+                <div style={{ width: "100%", height: 60, borderRadius: 8, marginBottom: 10, border: "1px solid var(--border)", background: bg?.type === "color" ? bg.color : "#1a1a24" }} />
+                <label className="field-label">Pick a color</label>
+                <input type="color"
+                  value={bg?.type === "color" ? bg.color : "#222233"}
+                  onChange={e => setBg({ type: "color", color: e.target.value })}
+                  style={{ width: "100%", height: 36, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", marginBottom: 10 }}
                 />
-
-                {/* Single button - Change Photo (also acts as remove via new selection) */}
-                <button
-                  className="btn btn-ghost"
-                  style={{ width: "100%", justifyContent: "center", fontSize: "0.78rem" }}
-                  onClick={() => bgFileRef.current?.click()}
-                >
-                  🖼 Change Photo
-                </button>
-                <button
-                  onClick={() => { setBg(null); setBgOpacity(1); }}
-                  style={{ width: "100%", marginTop: 6, padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}
-                >
-                  Remove background
-                </button>
-                <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 6 }}>Drag image on canvas to pan.</p>
+                {/* Quick swatches */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {["#1a1a24", "#7c3aed", "#e60023", "#1877f2", "#10b981", "#f59e0b", "#ec4899", "#0ea5e9", "#ffffff", "#000000"].map(c => (
+                    <button key={c} onClick={() => setBg({ type: "color", color: c })}
+                      style={{ width: 26, height: 26, borderRadius: 6, background: c, border: bg?.type === "color" && bg.color === c ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer" }} />
+                  ))}
+                </div>
+                {bg?.type === "color" && (
+                  <button onClick={() => setBg(null)}
+                    style={{ width: "100%", padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
+                    Remove background
+                  </button>
+                )}
               </div>
-            ) : (
-              <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }}
-                onClick={() => bgFileRef.current?.click()}>
-                🖼 Set Background Photo
-              </button>
+            )}
+
+            {/* GRADIENT tab */}
+            {bgTab === "gradient" && (
+              <div>
+                <div style={{
+                  width: "100%", height: 60, borderRadius: 8, marginBottom: 10, border: "1px solid var(--border)",
+                  background: bg?.type === "gradient"
+                    ? `linear-gradient(${bg.angle || 135}deg, ${bg.from}, ${bg.to})`
+                    : "linear-gradient(135deg, #7c3aed, #ec4899)",
+                }} />
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="field-label">From</label>
+                    <input type="color"
+                      value={bg?.type === "gradient" ? bg.from : "#7c3aed"}
+                      onChange={e => setBg(prev => ({ type: "gradient", from: e.target.value, to: prev?.type === "gradient" ? prev.to : "#ec4899", angle: prev?.type === "gradient" ? prev.angle : 135 }))}
+                      style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="field-label">To</label>
+                    <input type="color"
+                      value={bg?.type === "gradient" ? bg.to : "#ec4899"}
+                      onChange={e => setBg(prev => ({ type: "gradient", from: prev?.type === "gradient" ? prev.from : "#7c3aed", to: e.target.value, angle: prev?.type === "gradient" ? prev.angle : 135 }))}
+                      style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                  </div>
+                </div>
+                <label className="field-label">Angle — {bg?.type === "gradient" ? bg.angle : 135}°</label>
+                <input type="range" min="0" max="360" step="15"
+                  value={bg?.type === "gradient" ? bg.angle : 135}
+                  onChange={e => setBg(prev => ({ type: "gradient", from: prev?.type === "gradient" ? prev.from : "#7c3aed", to: prev?.type === "gradient" ? prev.to : "#ec4899", angle: Number(e.target.value) }))}
+                  style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }} />
+                {/* Quick presets */}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                  {[
+                    { from: "#7c3aed", to: "#ec4899", angle: 135 },
+                    { from: "#e60023", to: "#f59e0b", angle: 135 },
+                    { from: "#1877f2", to: "#0ea5e9", angle: 135 },
+                    { from: "#10b981", to: "#0ea5e9", angle: 135 },
+                    { from: "#000000", to: "#374151", angle: 180 },
+                    { from: "#ec4899", to: "#f59e0b", angle: 90 },
+                  ].map((g, i) => (
+                    <button key={i} onClick={() => setBg({ type: "gradient", ...g })}
+                      style={{ width: 32, height: 32, borderRadius: 6, background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`, border: "1px solid var(--border)", cursor: "pointer" }} />
+                  ))}
+                </div>
+                {bg?.type === "gradient" && (
+                  <button onClick={() => setBg(null)}
+                    style={{ width: "100%", padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
+                    Remove background
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -987,14 +1096,20 @@ export default function Home() {
                 }}
                 style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}
               >
-              {/* 1. Background */}
-              {bg && bg.src && (
+              {/* 1. Background — photo, solid color, or gradient */}
+              {bg?.type === "photo" && bg.src && (
                 <BgImage
                   src={bg.src}
                   ox={bg.ox} oy={bg.oy}
                   opacity={bgOpacity}
                   onPan={(ox, oy) => setBg(b => ({ ...b, ox, oy }))}
                 />
+              )}
+              {bg?.type === "color" && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1, background: bg.color }} />
+              )}
+              {bg?.type === "gradient" && (
+                <div style={{ position: "absolute", inset: 0, zIndex: 1, background: `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` }} />
               )}
 
               {/* 3. Overlay images */}
