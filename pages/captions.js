@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 
 const PLATFORMS = [
   { key: "pinterest", icon: "📌", label: "Pinterest", color: "#e60023" },
@@ -109,6 +110,10 @@ export default function Captions() {
 
   return (
     <div>
+      <Head>
+        <title>AI Captions — AmbaigDesigns</title>
+        <meta name="description" content="Generate or write captions for Pinterest, Facebook, Instagram, and Threads." />
+      </Head>
       <div className="page-header">
         <h1>AI Captions</h1>
         <p>Edit, copy, or add captions directly onto your canvas.</p>
