@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 
 // ── Text styles ──────────────────────────────────────────────────
 const TEXT_STYLES = {
@@ -757,6 +758,10 @@ export default function Home() {
 
   return (
     <div>
+      <Head>
+        <title>Design Studio — AmbaigDesigns</title>
+        <meta name="description" content="Create pins and mockups with backgrounds, photos, and text — free, no sign-up required." />
+      </Head>
       <div className="page-header">
         <h1>Design Studio</h1>
         <p>Build your pin — background, images, text — then caption and post.</p>
