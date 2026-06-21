@@ -10,6 +10,14 @@ const TEXT_STYLES = {
   plain:    { textShadow: "none", background: "transparent" },
 };
 
+// ── Font choices ─────────────────────────────────────────────────
+const FONT_OPTIONS = {
+  sans:    { label: "Sans (Clean)",    family: "'DM Sans', sans-serif" },
+  serif:   { label: "Serif (Elegant)", family: "'Merriweather', serif" },
+  script:  { label: "Script (Playful)",family: "'Pacifico', cursive" },
+  display: { label: "Display (Bold)",  family: "'Bebas Neue', sans-serif" },
+};
+
 // ── Draggable text box ───────────────────────────────────────────
 function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const [editing, setEditing] = useState(false);
@@ -146,7 +154,7 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect, scale
           whiteSpace: "pre-wrap",   // preserves newlines on Enter
           wordBreak: "break-word",  // breaks long words
           overflowWrap: "break-word",
-          fontFamily: "DM Sans, sans-serif",
+          fontFamily: FONT_OPTIONS[box.font || "sans"].family,
           display: "block",
           width: "100%",
           boxSizing: "border-box",
@@ -414,6 +422,7 @@ export default function Home() {
   const [textBold, setTextBold]     = useState(false);
   const [textAlign, setTextAlign]   = useState("left");
   const [textStyle, setTextStyle]   = useState("shadow");
+  const [textFont, setTextFont]     = useState("sans");
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState("");
   const canvasRef  = useRef(null);
@@ -552,14 +561,14 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
-  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold, align = textAlign, style = textStyle) => {
+  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold, align = textAlign, style = textStyle, font = textFont) => {
     const id = Date.now();
     // Always use canvas coordinate space (sz.w/sz.h), never offsetWidth
     setTextBoxes(prev => [...prev, {
       id, text,
       x: 16,
       y: Math.max(30, Math.round(sz.h / 2) - 60),
-      color, fontSize: size, bold, align, style,
+      color, fontSize: size, bold, align, style, font,
     }]);
     setActiveEl({ type: "text", id });
   };
@@ -571,6 +580,14 @@ export default function Home() {
     // Flush live DOM text into state before reading for export
     const liveTextBoxes = flushTextEdits();
     await new Promise(r => setTimeout(r, 150));
+
+    // Ensure custom Google Fonts are fully loaded before drawing to canvas —
+    // otherwise fillText silently falls back to a default system font
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    } catch (e) {}
 
     try {
       const canvas = document.createElement("canvas");
@@ -667,7 +684,8 @@ export default function Home() {
       for (const box of liveTextBoxes) {
         if (!box.text?.trim()) continue;
         ctx.save();
-        const font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px sans-serif`;
+        const fontFamily = FONT_OPTIONS[box.font || "sans"].family.replace(/'/g, "");
+        const font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px ${fontFamily}`;
         ctx.font = font;
         ctx.fillStyle = box.color || "#ffffff";
         const align = box.align || "left";
@@ -804,6 +822,7 @@ export default function Home() {
               const curAlign = isEditingExisting ? (selectedBox.align || "left") : textAlign;
               const curStyle = isEditingExisting ? (selectedBox.style || "shadow") : textStyle;
               const curBold  = isEditingExisting ? !!selectedBox.bold : textBold;
+              const curFont  = isEditingExisting ? (selectedBox.font || "sans") : textFont;
 
               const apply = (patch) => {
                 if (isEditingExisting) {
@@ -814,6 +833,7 @@ export default function Home() {
                   if ("bold" in patch) setTextBold(patch.bold);
                   if ("align" in patch) setTextAlign(patch.align);
                   if ("style" in patch) setTextStyle(patch.style);
+                  if ("font" in patch) setTextFont(patch.font);
                 }
               };
 
@@ -843,6 +863,20 @@ export default function Home() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  {/* Font — always shown, each button rendered in its own face */}
+                  <label className="field-label">Font</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
+                    {Object.entries(FONT_OPTIONS).map(([key, f]) => (
+                      <button key={key} onClick={() => apply({ font: key })} style={{
+                        padding: "7px 4px", borderRadius: 6, fontSize: "0.85rem",
+                        border: curFont === key ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        background: curFont === key ? "var(--accent-glow)" : "transparent",
+                        color: curFont === key ? "var(--accent)" : "var(--text-muted)",
+                        cursor: "pointer", fontFamily: f.family,
+                      }}>{f.label.split(" ")[0]}</button>
+                    ))}
                   </div>
 
                   {/* Alignment — always shown */}
@@ -968,11 +1002,24 @@ export default function Home() {
                   onChange={e => setBg({ type: "color", color: e.target.value })}
                   style={{ width: "100%", height: 36, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", marginBottom: 10 }}
                 />
-                {/* Quick swatches */}
+                {/* Quick swatches — platform brand colors + neutrals */}
+                <label className="field-label">Quick Colors</label>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  {["#1a1a24", "#7c3aed", "#e60023", "#1877f2", "#10b981", "#f59e0b", "#ec4899", "#0ea5e9", "#ffffff", "#000000"].map(c => (
+                  {[
+                    { c: "#e60023", name: "Pinterest Red" },
+                    { c: "#1877f2", name: "Facebook Blue" },
+                    { c: "#833ab4", name: "Instagram Purple" },
+                    { c: "#000000", name: "Threads Black" },
+                    { c: "#1a1a24", name: "Charcoal" },
+                    { c: "#7c3aed", name: "Violet" },
+                    { c: "#10b981", name: "Emerald" },
+                    { c: "#f59e0b", name: "Amber" },
+                    { c: "#ec4899", name: "Pink" },
+                    { c: "#ffffff", name: "White" },
+                  ].map(({ c, name }) => (
                     <button key={c} onClick={() => setBg({ type: "color", color: c })}
-                      style={{ width: 26, height: 26, borderRadius: 6, background: c, border: bg?.type === "color" && bg.color === c ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer" }} />
+                      title={name}
+                      style={{ width: 28, height: 28, borderRadius: 6, background: c, border: bg?.type === "color" && bg.color === c ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer" }} />
                   ))}
                 </div>
                 {bg?.type === "color" && (
@@ -1014,20 +1061,37 @@ export default function Home() {
                   value={bg?.type === "gradient" ? bg.angle : 135}
                   onChange={e => setBg(prev => ({ type: "gradient", from: prev?.type === "gradient" ? prev.from : "#7c3aed", to: prev?.type === "gradient" ? prev.to : "#ec4899", angle: Number(e.target.value) }))}
                   style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }} />
-                {/* Quick presets */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                {/* Brand-matched presets */}
+                <label className="field-label">Brand Presets</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
                   {[
-                    { from: "#7c3aed", to: "#ec4899", angle: 135 },
-                    { from: "#e60023", to: "#f59e0b", angle: 135 },
-                    { from: "#1877f2", to: "#0ea5e9", angle: 135 },
-                    { from: "#10b981", to: "#0ea5e9", angle: 135 },
-                    { from: "#000000", to: "#374151", angle: 180 },
-                    { from: "#ec4899", to: "#f59e0b", angle: 90 },
-                  ].map((g, i) => (
-                    <button key={i} onClick={() => setBg({ type: "gradient", ...g })}
-                      style={{ width: 32, height: 32, borderRadius: 6, background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`, border: "1px solid var(--border)", cursor: "pointer" }} />
+                    { name: "Pinterest Red",   from: "#e60023", to: "#ad081b", angle: 135 },
+                    { name: "Instagram Glow",  from: "#833ab4", to: "#fd1d1d", angle: 135 },
+                    { name: "Facebook Blue",   from: "#1877f2", to: "#0d5bc7", angle: 135 },
+                    { name: "Sunset",          from: "#f59e0b", to: "#ec4899", angle: 120 },
+                    { name: "Ocean",           from: "#0ea5e9", to: "#10b981", angle: 135 },
+                    { name: "Midnight",        from: "#1a1a24", to: "#374151", angle: 180 },
+                    { name: "Royal Purple",    from: "#7c3aed", to: "#4c1d95", angle: 135 },
+                    { name: "Peach",           from: "#fbbf24", to: "#fb7185", angle: 120 },
+                    { name: "Mint",            from: "#34d399", to: "#0ea5e9", angle: 135 },
+                  ].map((g) => (
+                    <button key={g.name} onClick={() => setBg({ type: "gradient", from: g.from, to: g.to, angle: g.angle })}
+                      title={g.name}
+                      style={{
+                        height: 40, borderRadius: 7,
+                        background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`,
+                        border: bg?.type === "gradient" && bg.from === g.from && bg.to === g.to ? "2px solid var(--accent)" : "1px solid var(--border)",
+                        cursor: "pointer", position: "relative",
+                      }}
+                    >
+                      <span style={{ position: "absolute", bottom: 2, left: 4, right: 4, fontSize: "0.55rem", color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.8)", textAlign: "left", fontWeight: 600, lineHeight: 1.2 }}>
+                        {g.name}
+                      </span>
+                    </button>
                   ))}
                 </div>
+
+                <label className="field-label">Custom</label>
                 {bg?.type === "gradient" && (
                   <button onClick={() => setBg(null)}
                     style={{ width: "100%", padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
