@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import Head from "next/head";
 import "../styles/globals.css";
 
 const NAV = [
@@ -10,10 +11,24 @@ const NAV = [
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
-  if (router.pathname === "/") return <Component {...pageProps} />;
+
+  const defaultHead = (
+    <Head>
+      <title>AmbaigDesigns — Create, Caption, Post</title>
+      <meta name="description" content="Free pin and mockup design tool. Create, caption with AI, and post to Pinterest, Facebook, Instagram, and Threads — no sign-up required." />
+      <meta property="og:title" content="AmbaigDesigns" />
+      <meta property="og:description" content="Create pins and mockups, generate AI captions, and post to your favorite platforms — free, no account needed." />
+      <meta property="og:type" content="website" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+    </Head>
+  );
+
+  if (router.pathname === "/") return <>{defaultHead}<Component {...pageProps} /></>;
 
   return (
-    <div className="app-shell">
+    <>
+      {defaultHead}
+      <div className="app-shell">
       {/* Desktop sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
@@ -55,6 +70,7 @@ export default function App({ Component, pageProps }) {
           </button>
         ))}
       </nav>
-    </div>
+      </div>
+    </>
   );
 }
