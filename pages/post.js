@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
+import Head from "next/head";
 
 const PLATFORMS = [
   {
@@ -138,6 +139,10 @@ export default function PostManager() {
 
   return (
     <div>
+      <Head>
+        <title>Post Manager — AmbaigDesigns</title>
+        <meta name="description" content="Post your design to Pinterest, Facebook, Instagram, or Threads." />
+      </Head>
       <div className="page-header">
         <h1>Post Manager</h1>
         <p>Write or edit captions below, then tap Open & Post for each platform.</p>
