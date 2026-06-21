@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import Head from "next/head";
 
 const PLATFORMS = [
   { key: "pinterest", label: "Pinterest", icon: "📌", color: "#e60023" },
@@ -59,6 +60,10 @@ export default function Settings() {
 
   return (
     <div>
+      <Head>
+        <title>Settings — AmbaigDesigns</title>
+        <meta name="description" content="Manage your AmbaigDesigns preferences and saved data." />
+      </Head>
       <div className="page-header">
         <h1>Settings</h1>
         <p>Your preferences and data are saved in this browser only.</p>
