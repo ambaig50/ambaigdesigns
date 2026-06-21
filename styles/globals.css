@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&family=Pacifico&family=Bebas+Neue&family=Merriweather:wght@400;700&display=swap');
 
 :root {
   --bg: #0f0f13;
@@ -16,7 +16,7 @@
   --danger: #f87171;
   --pinterest: #e60023;
   --facebook: #1877f2;
-  --instagram: #F047FF;
+  --instagram: #e1306c;
   --threads: #1a1a1a;
   --radius: 12px;
   --radius-lg: 20px;
