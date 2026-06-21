@@ -9,6 +9,14 @@ const PLATFORMS = [
   { key: "threads",   icon: "🧵", label: "Threads",   color: "#aaa"    },
 ];
 
+// Must match FONT_OPTIONS in home.js so previews render identically
+const FONT_OPTIONS = {
+  sans:    "'DM Sans', sans-serif",
+  serif:   "'Merriweather', serif",
+  script:  "'Pacifico', cursive",
+  display: "'Bebas Neue', sans-serif",
+};
+
 export default function Captions() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -156,7 +164,7 @@ export default function Captions() {
                   ))}
                   {/* Text boxes */}
                   {canvasState?.textBoxes?.map(box => (
-                    <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
+                    <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, fontFamily: FONT_OPTIONS[box.font || "sans"], textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
                   ))}
                 </div>
               </div>
