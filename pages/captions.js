@@ -158,14 +158,20 @@ export default function Captions() {
                   {canvasState?.bg?.type === "gradient" && (
                     <div style={{ position: "absolute", inset: 0, background: `linear-gradient(${canvasState.bg.angle}deg, ${canvasState.bg.from}, ${canvasState.bg.to})` }} />
                   )}
-                  {/* Overlay images */}
-                  {canvasState?.images?.map(img => (
-                    <img key={img.id} src={img.src} alt="" style={{ position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h, objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, borderRadius: 4 }} />
-                  ))}
-                  {/* Text boxes */}
-                  {canvasState?.textBoxes?.map(box => (
-                    <div key={box.id} style={{ position: "absolute", left: box.x, top: box.y, color: box.color || "#fff", fontSize: box.fontSize || 18, fontWeight: box.bold ? 700 : 400, fontFamily: FONT_OPTIONS[box.font || "sans"], textAlign: box.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{box.text}</div>
-                  ))}
+                  {/* Layers (new unified format) */}
+                  {canvasState?.layers?.map(layer => {
+                    if (layer.visible === false) return null;
+                    if (layer.type === "image") return (
+                      <img key={layer.id} src={layer.src} alt="" style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, borderRadius: 4 }} />
+                    );
+                    if (layer.type === "sticker") return (
+                      <span key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, fontSize: (layer.size || 60) * 0.75, lineHeight: 1 }}>{layer.emoji}</span>
+                    );
+                    if (layer.type === "text") return (
+                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{layer.text}</div>
+                    );
+                    return null;
+                  })}
                 </div>
               </div>
             );

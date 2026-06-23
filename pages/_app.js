@@ -3,10 +3,11 @@ import Head from "next/head";
 import "../styles/globals.css";
 
 const NAV = [
-  { href: "/home",      icon: "🎨", label: "Studio"   },
-  { href: "/captions",  icon: "✨", label: "Captions" },
-  { href: "/post",      icon: "📤", label: "Post"     },
-  { href: "/settings",  icon: "⚙️",  label: "Settings" },
+  { href: "/home",      icon: "🎨", label: "Studio"    },
+  { href: "/designs",   icon: "📁", label: "Designs"   },
+  { href: "/captions",  icon: "✨", label: "Captions"  },
+  { href: "/post",      icon: "📤", label: "Post"      },
+  { href: "/settings",  icon: "⚙️",  label: "Settings"  },
 ];
 
 export default function App({ Component, pageProps }) {

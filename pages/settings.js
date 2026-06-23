@@ -37,10 +37,12 @@ export default function Settings() {
       const canvasState = JSON.parse(localStorage.getItem("ambaig_canvas_state") || "null");
       const captions = JSON.parse(localStorage.getItem("ambaig_last_captions") || "null");
       const history = JSON.parse(localStorage.getItem("ambaig_post_history") || "[]");
+      const designs = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
       setStorageInfo({
-        hasDesign: !!(canvasState?.textBoxes?.length || canvasState?.images?.length || canvasState?.bg),
+        hasDesign: !!(canvasState?.layers?.length || canvasState?.bg),
         hasCaptions: !!(captions && Object.values(captions).some(v => v && typeof v === "string")),
         postCount: history.length,
+        designCount: designs.length,
       });
     } catch (e) {}
   }, []);
@@ -75,6 +77,10 @@ export default function Settings() {
         <div className="card">
           <p style={{ fontWeight: 700, marginBottom: 12 }}>What's Currently Saved</p>
           <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Saved designs (gallery)</span>
+              <span className="badge badge-muted">{storageInfo.designCount || 0} / 20</span>
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
               <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Active design on canvas</span>
               <span className={`badge ${storageInfo.hasDesign ? "badge-success" : "badge-muted"}`}>

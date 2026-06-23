@@ -1,28 +1,163 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useReducer, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 
-// ── Text styles ──────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────
 const TEXT_STYLES = {
-  shadow:   { textShadow: "0 2px 8px rgba(0,0,0,0.9)", background: "transparent" },
-  outline:  { textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000", background: "transparent" },
-  pill:     { textShadow: "none", background: "rgba(0,0,0,0.55)", borderRadius: 6, padding: "4px 12px" },
-  plain:    { textShadow: "none", background: "transparent" },
+  shadow:  { textShadow: "0 2px 8px rgba(0,0,0,0.9)", background: "transparent" },
+  outline: { textShadow: "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000", background: "transparent" },
+  pill:    { textShadow: "none", background: "rgba(0,0,0,0.55)", borderRadius: 6, padding: "4px 12px" },
+  plain:   { textShadow: "none", background: "transparent" },
 };
 
-// ── Font choices ─────────────────────────────────────────────────
 const FONT_OPTIONS = {
-  sans:    { label: "Sans (Clean)",    family: "'DM Sans', sans-serif" },
-  serif:   { label: "Serif (Elegant)", family: "'Merriweather', serif" },
-  script:  { label: "Script (Playful)",family: "'Pacifico', cursive" },
-  display: { label: "Display (Bold)",  family: "'Bebas Neue', sans-serif" },
+  sans:    { label: "Sans",    family: "'DM Sans', sans-serif" },
+  serif:   { label: "Serif",   family: "'Merriweather', serif" },
+  script:  { label: "Script",  family: "'Pacifico', cursive" },
+  display: { label: "Display", family: "'Bebas Neue', sans-serif" },
 };
 
-// ── Draggable text box ───────────────────────────────────────────
-function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
+const SIZES = {
+  portrait:  { w: 600, h: 900, label: "Pinterest 2:3" },
+  square:    { w: 600, h: 600, label: "Instagram 1:1" },
+  landscape: { w: 800, h: 450, label: "Facebook 16:9" },
+};
+
+const STICKER_SETS = {
+  "⭐ Stars":    ["⭐","🌟","✨","💫","🌙","☀️","🌈","❄️"],
+  "❤️ Hearts":   ["❤️","🧡","💛","💚","💙","💜","🖤","🤍"],
+  "🎉 Party":    ["🎉","🎊","🎈","🥳","🎁","🎀","🏆","🥇"],
+  "📌 Markers":  ["📌","🔖","📍","🏷️","💡","🔥","⚡","❗"],
+  "😊 Faces":    ["😊","😍","🥰","😎","🤩","😂","🙌","👏"],
+  "🌸 Nature":   ["🌸","🌺","🌻","🌹","🍃","🌿","🦋","🌊"],
+  "◆ Shapes":    ["⬛","🔴","🟡","🟢","🔵","🟣","🟠","⬜"],
+  "➡️ Arrows":   ["➡️","⬅️","⬆️","⬇️","↗️","↘️","🔄","↩️"],
+};
+
+// ── Canvas state shape ───────────────────────────────────────────
+const INIT_CANVAS = {
+  canvasSize: "portrait",
+  bg: null,
+  bgOpacity: 1,
+  layers: [],   // unified: { type:"image"|"text"|"sticker", id, ...props, visible, locked }
+};
+
+// ── Undo/redo reducer ────────────────────────────────────────────
+const MAX_HISTORY = 20;
+
+function historyReducer(state, action) {
+  const { past, present, future } = state;
+
+  switch (action.type) {
+    case "SET": {
+      const next = { ...present, ...action.payload };
+      return { past: [...past.slice(-MAX_HISTORY), present], present: next, future: [] };
+    }
+    case "UNDO": {
+      if (!past.length) return state;
+      const prev = past[past.length - 1];
+      return { past: past.slice(0, -1), present: prev, future: [present, ...future] };
+    }
+    case "REDO": {
+      if (!future.length) return state;
+      const next = future[0];
+      return { past: [...past, present], present: next, future: future.slice(1) };
+    }
+    case "RESET": {
+      return { past: [], present: { ...INIT_CANVAS, ...action.payload }, future: [] };
+    }
+    default: return state;
+  }
+}
+
+// ── Drag helper ──────────────────────────────────────────────────
+function useDragLayer({ layer, onUpdate, canvasRef, scale }) {
+  const startDrag = (e) => {
+    e.stopPropagation();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const s = scale || 1;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    const offsetX = (cx - rect.left) / s - layer.x;
+    const offsetY = (cy - rect.top) / s - layer.y;
+    const canvasW = rect.width / s;
+    const canvasH = rect.height / s;
+
+    const move = (ev) => {
+      ev.preventDefault();
+      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      onUpdate({
+        x: Math.max(0, Math.min((mx - rect.left) / s - offsetX, canvasW - 20)),
+        y: Math.max(0, Math.min((my - rect.top) / s - offsetY, canvasH - 20)),
+      });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+  };
+  return startDrag;
+}
+
+// ── Sticker layer ────────────────────────────────────────────────
+function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
+  const startDrag = useDragLayer({ layer, onUpdate, canvasRef, scale });
+
+  const startResize = (e) => {
+    e.stopPropagation();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const s = scale || 1;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const startSize = layer.size || 60;
+    const move = (ev) => {
+      ev.preventDefault();
+      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      onUpdate({ size: Math.max(24, startSize + (mx - cx) / s) });
+    };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => { onSelect(); startDrag(e); }}
+      onTouchStart={(e) => { onSelect(); startDrag(e); }}
+      data-canvas-el="sticker"
+      style={{
+        position: "absolute", left: layer.x, top: layer.y,
+        width: layer.size || 60, height: layer.size || 60,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "move", userSelect: "none", touchAction: "none",
+        outline: selected ? "2px dashed #c084fc" : "2px dashed transparent",
+        borderRadius: 4, zIndex: 18,
+        opacity: layer.visible === false ? 0 : 1,
+      }}
+    >
+      <span style={{ fontSize: (layer.size || 60) * 0.75, lineHeight: 1, pointerEvents: "none", filter: layer.shadow ? "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" : "none" }}>
+        {layer.emoji}
+      </span>
+      {selected && (
+        <>
+          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: -10, left: -10, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
+          <div onMouseDown={startResize} onTouchStart={startResize}
+            style={{ position: "absolute", bottom: -6, right: -6, width: 16, height: 16, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize", zIndex: 30, border: "2px solid white" }} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Text layer ───────────────────────────────────────────────────
+function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const [editing, setEditing] = useState(false);
-  const editRef  = useRef(null);
-  const wrapRef  = useRef(null);
+  const editRef = useRef(null);
+  const startDrag = useDragLayer({ layer, onUpdate, canvasRef, scale });
 
   const handleDoubleClick = (e) => {
     e.stopPropagation();
@@ -30,392 +165,160 @@ function TextBox({ box, onUpdate, onRemove, canvasRef, selected, onSelect, scale
     setTimeout(() => {
       editRef.current?.focus();
       const el = editRef.current;
-      if (el) {
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(range);
-      }
+      if (el) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r); }
     }, 50);
   };
 
-  const handleBlur = (e) => {
-    setEditing(false);
-    const newText = e.target.innerText || box.text;
-    onUpdate({ text: newText });
-  };
-
+  const handleBlur = (e) => { setEditing(false); onUpdate({ text: e.target.innerText || layer.text }); };
   useEffect(() => { if (!selected) setEditing(false); }, [selected]);
 
-  const startDrag = (e) => {
-    if (editing) return;
-    e.stopPropagation();
-    onSelect();
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const s = scale || 1;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX;
-    const cy = e.touches ? e.touches[0].clientY : e.clientY;
-    // Convert screen offset to canvas-space offset by dividing by scale
-    const offsetX = (cx - rect.left) / s - box.x;
-    const offsetY = (cy - rect.top) / s - box.y;
-    // Canvas coordinate space dimensions (not scaled screen rect)
-    const canvasW = rect.width / s;
-    const canvasH = rect.height / s;
-    const move = (ev) => {
-      ev.preventDefault();
-      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      const canvasX = (mx - rect.left) / s;
-      const canvasY = (my - rect.top) / s;
-      onUpdate({
-        x: Math.max(0, Math.min(canvasX - offsetX, canvasW - 20)),
-        y: Math.max(0, Math.min(canvasY - offsetY, canvasH - 20)),
-      });
-    };
-    const up = () => {
-      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
-    };
-    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
-  };
-
-  const style = TEXT_STYLES[box.style || "shadow"];
+  const style = TEXT_STYLES[layer.style || "shadow"];
+  const fontFamily = FONT_OPTIONS[layer.font || "sans"].family;
 
   return (
     <div
-      ref={wrapRef}
-      onMouseDown={startDrag}
-      onTouchStart={startDrag}
+      onMouseDown={(e) => { if (!editing) { onSelect(); startDrag(e); } }}
+      onTouchStart={(e) => { if (!editing) { onSelect(); startDrag(e); } }}
       onDoubleClick={handleDoubleClick}
-      data-canvas-el="text"
-      data-textbox-id={box.id}
-      style={{
-        position: "absolute",
-        left: box.x, top: box.y,
-        width: Math.max(80, 600 - box.x - 16), // spans to canvas right minus margin
-        cursor: editing ? "text" : "move",
-        outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
-        borderRadius: 4,
-        userSelect: editing ? "text" : "none",
-        touchAction: editing ? "auto" : "none",
-        zIndex: 20,
-      }}
+      data-canvas-el="text" data-textbox-id={layer.id}
+      style={{ position: "absolute", left: layer.x, top: layer.y, width: Math.max(80, 600 - layer.x - 16), cursor: editing ? "text" : "move", outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent", borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none", zIndex: 20, opacity: layer.visible === false ? 0 : 1 }}
     >
-      {/* × inside top-left so never off-screen */}
       {selected && !editing && (
         <>
-          <button
-            onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 12, cursor: "pointer", zIndex: 30, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}
-          >×</button>
-          <div style={{ position: "absolute", bottom: -15, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>
-            double-tap to edit
-          </div>
+          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
+            style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <div style={{ position: "absolute", bottom: -14, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>double-tap to edit</div>
         </>
       )}
-      <div
-        ref={editRef}
-        data-text-content
-        contentEditable={editing}
-        suppressContentEditableWarning
+      <div ref={editRef} data-text-content contentEditable={editing} suppressContentEditableWarning
         onBlur={handleBlur}
         onKeyDown={(e) => {
           if (editing) e.stopPropagation();
-          if (e.key === "Enter") {
-            e.preventDefault();
-            // Insert a plain line break so innerText captures \n correctly
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount) {
-              const range = sel.getRangeAt(0);
-              range.deleteContents();
-              const br = document.createTextNode("\n");
-              range.insertNode(br);
-              range.setStartAfter(br);
-              range.setEndAfter(br);
-              sel.removeAllRanges();
-              sel.addRange(range);
-            }
-          }
+          if (e.key === "Enter") { e.preventDefault(); const sel = window.getSelection(); if (sel?.rangeCount) { const r = sel.getRangeAt(0); r.deleteContents(); const br = document.createTextNode("\n"); r.insertNode(br); r.setStartAfter(br); r.setEndAfter(br); sel.removeAllRanges(); sel.addRange(r); } }
         }}
         onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
         onTouchStart={(e) => { if (editing) e.stopPropagation(); }}
-        style={{
-          color: box.color || "#ffffff",
-          fontSize: box.fontSize || 18,
-          fontWeight: box.bold ? 700 : 400,
-          textAlign: box.align || "left",
-          padding: editing ? "4px 4px 4px 26px" : "4px 4px 4px 26px",
-          minHeight: 28,
-          outline: "none",
-          lineHeight: 1.5,
-          whiteSpace: "pre-wrap",   // preserves newlines on Enter
-          wordBreak: "break-word",  // breaks long words
-          overflowWrap: "break-word",
-          fontFamily: FONT_OPTIONS[box.font || "sans"].family,
-          display: "block",
-          width: "100%",
-          boxSizing: "border-box",
-          ...style,
-        }}
-      >{box.text}</div>
+        style={{ color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, textAlign: layer.align || "left", padding: "4px 4px 4px 26px", minHeight: 28, outline: "none", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", fontFamily, display: "block", width: "100%", boxSizing: "border-box", ...style }}
+      >{layer.text}</div>
     </div>
   );
 }
 
-// ── Draggable + pinch-resize + crop image ───────────────────────
-function CanvasImage({ img, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
+// ── Image layer ──────────────────────────────────────────────────
+function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const [mode, setMode] = useState("move");
-
-  // Convert screen coords to canvas coords accounting for CSS scale
-  const toCanvas = (screenX, screenY) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return { x: screenX, y: screenY };
-    return {
-      x: (screenX - rect.left) / scale,
-      y: (screenY - rect.top) / scale,
-    };
-  };
+  const toCanvas = (sx, sy) => { const r = canvasRef.current?.getBoundingClientRect(); if (!r) return { x: sx, y: sy }; return { x: (sx - r.left) / scale, y: (sy - r.top) / scale }; };
 
   const startDrag = (e) => {
     if (mode === "crop") { startCrop(e); return; }
     e.preventDefault(); e.stopPropagation(); onSelect();
-
-    // Two finger pinch = resize
-    if (e.touches && e.touches.length === 2) { startPinch(e); return; }
-
+    if (e.touches?.length === 2) { startPinch(e); return; }
+    const r = canvasRef.current?.getBoundingClientRect(); if (!r) return;
+    const s = scale || 1;
     const pt = e.touches ? e.touches[0] : e;
-    const start = toCanvas(pt.clientX, pt.clientY);
-    const origX = img.x, origY = img.y;
-
+    const ox = (pt.clientX - r.left) / s - layer.x, oy = (pt.clientY - r.top) / s - layer.y;
+    const cw = r.width / s, ch = r.height / s;
     const move = (ev) => {
       ev.preventDefault();
-      // Switch to pinch if second finger added
-      if (ev.touches && ev.touches.length === 2) return;
       const p = ev.touches ? ev.touches[0] : ev;
-      const cur = toCanvas(p.clientX, p.clientY);
-      const canvasW = canvasRef.current?.offsetWidth || 600;
-      const canvasH = canvasRef.current?.offsetHeight || 900;
-      onUpdate({
-        x: Math.max(0, Math.min(origX + cur.x - start.x, canvasW - img.w)),
-        y: Math.max(0, Math.min(origY + cur.y - start.y, canvasH - img.h)),
-      });
+      onUpdate({ x: Math.max(0, Math.min((p.clientX - r.left) / s - ox, cw - layer.w)), y: Math.max(0, Math.min((p.clientY - r.top) / s - oy, ch - layer.h)) });
     };
-    const up = () => {
-      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
-    };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
-  // Pinch-to-resize with two fingers
   const startPinch = (e) => {
     e.preventDefault();
-    const t0 = e.touches[0], t1 = e.touches[1];
-    const startDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) / scale;
-    const startW = img.w, startH = img.h;
-
-    const move = (ev) => {
-      if (ev.touches.length < 2) return;
-      ev.preventDefault();
-      const d = Math.hypot(ev.touches[1].clientX - ev.touches[0].clientX, ev.touches[1].clientY - ev.touches[0].clientY) / scale;
-      const ratio = d / startDist;
-      onUpdate({
-        w: Math.max(50, Math.round(startW * ratio)),
-        h: Math.max(50, Math.round(startH * ratio)),
-      });
-    };
-    const up = () => {
-      window.removeEventListener("touchmove", move);
-      window.removeEventListener("touchend", up);
-    };
-    window.addEventListener("touchmove", move, { passive: false });
-    window.addEventListener("touchend", up);
+    const d0 = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY) / scale;
+    const sw = layer.w, sh = layer.h;
+    const move = (ev) => { if (ev.touches.length < 2) return; ev.preventDefault(); const d = Math.hypot(ev.touches[1].clientX - ev.touches[0].clientX, ev.touches[1].clientY - ev.touches[0].clientY) / scale; const ratio = d / d0; onUpdate({ w: Math.max(50, Math.round(sw * ratio)), h: Math.max(50, Math.round(sh * ratio)) }); };
+    const up = () => { window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
   const startCrop = (e) => {
     e.preventDefault(); e.stopPropagation();
     const pt = e.touches ? e.touches[0] : e;
-    const startX = pt.clientX, startY = pt.clientY;
-    const sox = img.ox ?? 50, soy = img.oy ?? 50;
-    const move = (ev) => {
-      ev.preventDefault();
-      const p = ev.touches ? ev.touches[0] : ev;
-      onUpdate({
-        ox: Math.max(0, Math.min(sox - (p.clientX - startX) * 0.3, 100)),
-        oy: Math.max(0, Math.min(soy - (p.clientY - startY) * 0.3, 100)),
-      });
-    };
-    const up = () => {
-      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
-    };
+    const sx = pt.clientX, sy = pt.clientY, sox = layer.ox ?? 50, soy = layer.oy ?? 50;
+    const move = (ev) => { ev.preventDefault(); const p = ev.touches ? ev.touches[0] : ev; onUpdate({ ox: Math.max(0, Math.min(sox - (p.clientX - sx) * 0.3, 100)), oy: Math.max(0, Math.min(soy - (p.clientY - sy) * 0.3, 100)) }); };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
-  // Desktop resize from corner
   const startResize = (e) => {
     e.preventDefault(); e.stopPropagation();
-    const pt = e.touches ? e.touches[0] : e;
-    const start = toCanvas(pt.clientX, pt.clientY);
-    const sw = img.w, sh = img.h;
-    const canvasW = canvasRef.current?.offsetWidth || 600;
-    const canvasH = canvasRef.current?.offsetHeight || 900;
-    const move = (ev) => {
-      ev.preventDefault();
-      const p = ev.touches ? ev.touches[0] : ev;
-      const cur = toCanvas(p.clientX, p.clientY);
-      onUpdate({
-        w: Math.max(50, Math.min(sw + cur.x - start.x, canvasW - img.x)),
-        h: Math.max(50, Math.min(sh + cur.y - start.y, canvasH - img.y)),
-      });
-    };
-    const up = () => {
-      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
-    };
+    const start = toCanvas(e.touches ? e.touches[0].clientX : e.clientX, e.touches ? e.touches[0].clientY : e.clientY);
+    const sw = layer.w, sh = layer.h, cw = canvasRef.current?.offsetWidth || 600, ch = canvasRef.current?.offsetHeight || 900;
+    const move = (ev) => { ev.preventDefault(); const p = ev.touches ? ev.touches[0] : ev; const cur = toCanvas(p.clientX, p.clientY); onUpdate({ w: Math.max(50, Math.min(sw + cur.x - start.x, cw - layer.x)), h: Math.max(50, Math.min(sh + cur.y - start.y, ch - layer.y)) }); };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
   return (
-    <div
-      onMouseDown={startDrag}
-      onTouchStart={(e) => {
-        if (e.touches.length === 2) { onSelect(); startPinch(e); }
-        else startDrag(e);
-      }}
-      data-canvas-el="img"
-      style={{
-        position: "absolute", left: img.x, top: img.y, width: img.w, height: img.h,
-        cursor: mode === "crop" ? "crosshair" : "move",
-        outline: selected ? "2px solid #c084fc" : "2px solid transparent",
-        userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15,
-      }}
+    <div onMouseDown={startDrag} onTouchStart={(e) => { if (e.touches.length === 2) { onSelect(); startPinch(e); } else startDrag(e); }} data-canvas-el="img"
+      style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, cursor: mode === "crop" ? "crosshair" : "move", outline: selected ? "2px solid #c084fc" : "2px solid transparent", userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15, opacity: layer.visible === false ? 0 : 1 }}
     >
-      <img src={img.src} alt="" draggable={false}
-        style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${img.ox ?? 50}% ${img.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
-
+      <img src={layer.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
       {selected && (
         <>
-          {/* Delete — top left */}
-          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
-            style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-
-          {/* Crop toggle — top right */}
-          <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }}
-            style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {mode === "move" ? "✂" : "↔"}
-          </button>
-
-          {/* Resize handle — bottom right INSIDE the image */}
-          <div onMouseDown={startResize} onTouchStart={startResize}
-            style={{ position: "absolute", bottom: 4, right: 4, width: 22, height: 22, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 10, color: "white", pointerEvents: "none" }}>⤡</span>
-          </div>
-
-          {/* Pinch hint on mobile */}
-          <div style={{ position: "absolute", bottom: 4, left: 34, background: "rgba(0,0,0,0.6)", color: "white", fontSize: 8, padding: "2px 5px", borderRadius: 3, pointerEvents: "none", whiteSpace: "nowrap" }}>
-            {mode === "crop" ? "drag to pan" : "pinch to resize"}
-          </div>
+          <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }} style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }} style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>{mode === "move" ? "✂" : "↔"}</button>
+          <div onMouseDown={startResize} onTouchStart={startResize} style={{ position: "absolute", bottom: 4, right: 4, width: 22, height: 22, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 10, color: "white", pointerEvents: "none" }}>⤡</span></div>
+          <div style={{ position: "absolute", bottom: 4, left: 34, background: "rgba(0,0,0,0.6)", color: "white", fontSize: 8, padding: "2px 5px", borderRadius: 3, pointerEvents: "none", whiteSpace: "nowrap" }}>{mode === "crop" ? "drag to pan" : "pinch to resize"}</div>
         </>
       )}
     </div>
   );
 }
 
-// ── Background image ─────────────────────────────────────────────
+// ── Background photo ─────────────────────────────────────────────
 function BgImage({ src, ox, oy, opacity, onPan }) {
   const startPan = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const cy = e.touches ? e.touches[0].clientY : e.clientY;
     const sox = ox, soy = oy;
-    const move = (ev) => {
-      ev.preventDefault();
-      const mx = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const my = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      onPan(
-        Math.max(0, Math.min(sox - (mx - cx) * 0.2, 100)),
-        Math.max(0, Math.min(soy - (my - cy) * 0.2, 100))
-      );
-    };
-    const up = () => {
-      window.removeEventListener("mousemove", move);
-      window.removeEventListener("mouseup", up);
-      window.removeEventListener("touchmove", move);
-      window.removeEventListener("touchend", up);
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
-    window.addEventListener("touchmove", move, { passive: false });
-    window.addEventListener("touchend", up);
+    const move = (ev) => { ev.preventDefault(); const mx = ev.touches ? ev.touches[0].clientX : ev.clientX; const my = ev.touches ? ev.touches[0].clientY : ev.clientY; onPan(Math.max(0, Math.min(sox - (mx - cx) * 0.2, 100)), Math.max(0, Math.min(soy - (my - cy) * 0.2, 100))); };
+    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
-
   if (!src) return null;
-
   return (
-    <div
-      onMouseDown={startPan}
-      onTouchStart={startPan}
-      style={{
-        position: "absolute", inset: 0, zIndex: 1,
-        cursor: "grab", overflow: "hidden",
-        opacity: opacity ?? 1,
-      }}
-    >
-      <img
-        src={src}
-        alt="background"
-        draggable={false}
-        style={{
-          width: "100%", height: "100%",
-          objectFit: "cover",
-          objectPosition: `${ox ?? 50}% ${oy ?? 50}%`,
-          display: "block",
-          pointerEvents: "none",
-          userSelect: "none",
-        }}
-      />
-      <div style={{
-        position: "absolute", bottom: 6, left: 6,
-        background: "rgba(0,0,0,0.5)", color: "white",
-        fontSize: 9, padding: "2px 6px", borderRadius: 3,
-        pointerEvents: "none",
-      }}>
-        drag to pan
-      </div>
+    <div onMouseDown={startPan} onTouchStart={startPan} style={{ position: "absolute", inset: 0, zIndex: 1, cursor: "grab", overflow: "hidden", opacity: opacity ?? 1 }}>
+      <img src={src} alt="bg" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${ox ?? 50}% ${oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: 6, left: 6, background: "rgba(0,0,0,0.5)", color: "white", fontSize: 9, padding: "2px 6px", borderRadius: 3, pointerEvents: "none" }}>drag to pan</div>
     </div>
   );
 }
 
-// ── Toast ────────────────────────────────────────────────────────
 function Toast({ msg }) {
   if (!msg) return null;
   return <div className="toast" style={{ zIndex: 999 }}>{msg}</div>;
 }
 
-// ── Main page ────────────────────────────────────────────────────
-const SIZES = {
-  portrait:  { w: 600, h: 900, label: "Pinterest 2:3" },
-  square:    { w: 600, h: 600, label: "Instagram 1:1" },
-  landscape: { w: 800, h: 450, label: "Facebook 16:9" },
-};
-
+// ────────────────────────────────────────────────────────────────
+// ── Main component ───────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────
 export default function Home() {
-  const [title, setTitle]           = useState("");
-  const [description, setDesc]      = useState("");
-  const [canvasSize, setCanvasSize] = useState("portrait");
-  const [bg, setBg]                 = useState(null);
+  const router = useRouter();
+
+  // ── Canvas state with undo/redo ──
+  const [{ past, present, future }, dispatch] = useReducer(historyReducer, {
+    past: [], present: { ...INIT_CANVAS }, future: [],
+  });
+  const { canvasSize, bg, bgOpacity, layers } = present;
+  const sz = SIZES[canvasSize];
+
+  const set = (payload) => dispatch({ type: "SET", payload });
+  const undo = () => dispatch({ type: "UNDO" });
+  const redo = () => dispatch({ type: "REDO" });
+
+  // ── UI-only state (not undoable) ──
   const [bgTab, setBgTab]           = useState("photo");
-  const [bgOpacity, setBgOpacity]   = useState(1);
-  const [images, setImages]         = useState([]);
-  const [textBoxes, setTextBoxes]   = useState([]);
   const [activeEl, setActiveEl]     = useState(null);
   const [textColor, setTextColor]   = useState("#ffffff");
   const [fontSize, setFontSize]     = useState(22);
@@ -425,25 +328,23 @@ export default function Home() {
   const [textFont, setTextFont]     = useState("sans");
   const [saving, setSaving]         = useState(false);
   const [toast, setToast]           = useState("");
-  const canvasRef  = useRef(null);
-  const imgFileRef = useRef(null);
-  const bgFileRef  = useRef(null);
-  const router     = useRouter();
+  const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [activeStickerSet, setActiveStickerSet] = useState("⭐ Stars");
 
-  const sz = SIZES[canvasSize];
-
-  // Compute CSS scale so canvas fits available container width — measured live, not guessed
-  const [canvasScale, setCanvasScale] = useState(1);
+  const canvasRef    = useRef(null);
+  const imgFileRef   = useRef(null);
+  const bgFileRef    = useRef(null);
   const canvasWrapRef = useRef(null);
+
+  // ── Canvas scale ──
+  const [canvasScale, setCanvasScale] = useState(1);
   useEffect(() => {
     const compute = () => {
-      const containerWidth = canvasWrapRef.current?.offsetWidth;
-      const available = containerWidth ? containerWidth - 4 : window.innerWidth - 20;
-      const scale = Math.min(1, available / sz.w);
-      setCanvasScale(scale);
+      const w = canvasWrapRef.current?.offsetWidth;
+      const available = w ? w - 4 : window.innerWidth - 20;
+      setCanvasScale(Math.min(1, available / sz.w));
     };
     compute();
-    // Re-measure after layout settles (fonts, images)
     const t = setTimeout(compute, 100);
     window.addEventListener("resize", compute);
     return () => { window.removeEventListener("resize", compute); clearTimeout(t); };
@@ -451,322 +352,121 @@ export default function Home() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
-  // ── Persist canvas state so it survives navigation ──
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const onKey = (e) => {
+      const meta = e.ctrlKey || e.metaKey;
+      if (meta && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (meta && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ── Persist canvas state ──
   useEffect(() => {
     const saved = localStorage.getItem("ambaig_canvas_state");
     if (saved) {
       try {
         const state = JSON.parse(saved);
-        if (state.textBoxes?.length) setTextBoxes(state.textBoxes);
-        if (state.images?.length) setImages(state.images);
-        if (state.bg) setBg(state.bg);
-        if (state.bgOpacity) setBgOpacity(state.bgOpacity);
-        if (state.canvasSize) setCanvasSize(state.canvasSize);
+        dispatch({ type: "RESET", payload: { canvasSize: state.canvasSize || "portrait", bg: state.bg || null, bgOpacity: state.bgOpacity ?? 1, layers: state.layers || [] } });
       } catch (e) {}
     } else {
-      // No saved design yet — apply user's default size preference
-      try {
-        const prefs = JSON.parse(localStorage.getItem("ambaig_prefs") || "{}");
-        if (prefs.defaultSize) setCanvasSize(prefs.defaultSize);
-      } catch (e) {}
+      try { const prefs = JSON.parse(localStorage.getItem("ambaig_prefs") || "{}"); if (prefs.defaultSize) set({ canvasSize: prefs.defaultSize }); } catch (e) {}
     }
   }, []);
 
-  // Auto-save canvas state whenever it changes
   useEffect(() => {
-    try {
-      localStorage.setItem("ambaig_canvas_state", JSON.stringify({
-        textBoxes, images, bg, bgOpacity, canvasSize,
-      }));
-    } catch (e) {}
-  }, [textBoxes, images, bg, bgOpacity, canvasSize]);
+    try { localStorage.setItem("ambaig_canvas_state", JSON.stringify({ canvasSize, bg, bgOpacity, layers })); } catch (e) {}
+  }, [canvasSize, bg, bgOpacity, layers]);
+
+  // ── Load pending captions from captions page ──
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
         const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
         if (pending.length > 0) {
-          setTextBoxes(prev => [
-            ...prev,
-            ...pending.map((p, i) => ({
-              id: Date.now() + i,
-              text: p.text,
-              x: 16,
-              y: Math.min(820, 500 + i * 90),
-              color: "#ffffff",
-              fontSize: 15,
-              bold: false,
-              align: "left",
-              style: "shadow",
-            })),
-          ]);
+          const newLayers = pending.map((p, i) => ({
+            id: Date.now() + i, type: "text", text: p.text,
+            x: 16, y: Math.min(820, 500 + i * 90),
+            color: "#ffffff", fontSize: 15, bold: false, align: "left", style: "shadow", font: "sans",
+            visible: true, locked: false,
+          }));
+          set({ layers: [...layers, ...newLayers] });
           localStorage.removeItem("ambaig_pending_text");
-          setToast("✅ Caption placed on canvas — drag to reposition");
-          setTimeout(() => setToast(""), 3500);
+          showToast("✅ Caption placed on canvas — drag to reposition");
         }
       } catch (e) {}
     }, 250);
     return () => clearTimeout(timer);
   }, []);
 
-  const loadFile = (file, cb) => {
-    const reader = new FileReader();
-    reader.onload = (e) => cb(e.target.result);
-    reader.readAsDataURL(file);
+  // ── Layer helpers ──
+  const updateLayer = (id, patch) => set({ layers: layers.map(l => l.id === id ? { ...l, ...patch } : l) });
+  const removeLayer = (id) => { set({ layers: layers.filter(l => l.id !== id) }); if (activeEl?.id === id) setActiveEl(null); };
+  const moveLayerUp = (id) => { const i = layers.findIndex(l => l.id === id); if (i < layers.length - 1) { const arr = [...layers]; [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; set({ layers: arr }); } };
+  const moveLayerDown = (id) => { const i = layers.findIndex(l => l.id === id); if (i > 0) { const arr = [...layers]; [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; set({ layers: arr }); } };
+
+  // ── Add layers ──
+  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold, align = textAlign, style = textStyle, font = textFont) => {
+    const id = Date.now();
+    const layer = { id, type: "text", text, x: 16, y: Math.max(30, Math.round(sz.h / 2) - 60), color, fontSize: size, bold, align, style, font, visible: true, locked: false };
+    set({ layers: [...layers, layer] });
+    setActiveEl({ type: "text", id });
+  };
+
+  const addSticker = (emoji) => {
+    const id = Date.now();
+    const layer = { id, type: "sticker", emoji, x: Math.round(sz.w / 2 - 30), y: Math.round(sz.h / 2 - 30), size: 60, shadow: true, visible: true, locked: false };
+    set({ layers: [...layers, layer] });
+    setActiveEl({ type: "sticker", id });
   };
 
   const addBg = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const src = ev.target.result;
-      if (src) {
-        setBg({ type: "photo", src, ox: 50, oy: 50 });
-        setBgTab("photo");
-      } else {
-        setToast("⚠️ Could not load image. Try a different file.");
-        setTimeout(() => setToast(""), 3000);
-      }
-      e.target.value = "";
-    };
-    reader.onerror = () => {
-      setToast("⚠️ Image read failed. Try again.");
-      setTimeout(() => setToast(""), 3000);
-      e.target.value = "";
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const addImage = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const src = ev.target.result;
-      if (src) {
-        // Place at 1/3 of canvas width, centered — always in canvas coordinate space
-        const imgW = Math.round(sz.w * 0.5);
-        const imgH = imgW;
-        setImages(prev => [...prev, {
-          id: Date.now(), src,
-          x: Math.round((sz.w - imgW) / 2),
-          y: Math.round((sz.h - imgH) / 4),
-          w: imgW, h: imgH,
-          ox: 50, oy: 50,
-        }]);
-      }
+      if (ev.target.result) { set({ bg: { type: "photo", src: ev.target.result, ox: 50, oy: 50 } }); setBgTab("photo"); }
+      else showToast("⚠️ Could not load image.");
       e.target.value = "";
     };
     reader.onerror = () => { e.target.value = ""; };
     reader.readAsDataURL(file);
   };
 
-  const addTextBox = (text = "Your text here", color = textColor, size = fontSize, bold = textBold, align = textAlign, style = textStyle, font = textFont) => {
-    const id = Date.now();
-    // Always use canvas coordinate space (sz.w/sz.h), never offsetWidth
-    setTextBoxes(prev => [...prev, {
-      id, text,
-      x: 16,
-      y: Math.max(30, Math.round(sz.h / 2) - 60),
-      color, fontSize: size, bold, align, style, font,
-    }]);
-    setActiveEl({ type: "text", id });
+  const addImageLayer = (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target.result) {
+        const id = Date.now();
+        const w = Math.round(sz.w * 0.5), h = w;
+        set({ layers: [...layers, { id, type: "image", src: ev.target.result, x: Math.round((sz.w - w) / 2), y: Math.round((sz.h - h) / 4), w, h, ox: 50, oy: 50, visible: true, locked: false }] });
+      }
+      e.target.value = "";
+    };
+    reader.readAsDataURL(file);
   };
 
-  // ── Download PNG using native Canvas API (works on mobile) ──
-  const downloadPNG = async () => {
-    setSaving(true);
-
-    // Flush live DOM text into state before reading for export
-    const liveTextBoxes = flushTextEdits();
-    await new Promise(r => setTimeout(r, 150));
-
-    // Ensure custom Google Fonts are fully loaded before drawing to canvas —
-    // otherwise fillText silently falls back to a default system font
-    try {
-      if (document.fonts && document.fonts.ready) {
-        await document.fonts.ready;
-      }
-    } catch (e) {}
-
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width  = sz.w * 2;  // 2x for retina
-      canvas.height = sz.h * 2;
-      const ctx = canvas.getContext("2d");
-      ctx.scale(2, 2);
-
-      // 1. White base background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, sz.w, sz.h);
-
-      // 2. Draw background — photo, solid color, or gradient
-      if (bg?.type === "photo" && bg.src) {
-        await new Promise((res) => {
-          const img = new window.Image();
-          img.onload = () => {
-            ctx.save();
-            ctx.globalAlpha = bgOpacity ?? 1;
-            const scale = Math.max(sz.w / img.width, sz.h / img.height);
-            const dw = img.width * scale, dh = img.height * scale;
-            const dx = (sz.w - dw) * (bg.ox / 100);
-            const dy = (sz.h - dh) * (bg.oy / 100);
-            ctx.drawImage(img, dx, dy, dw, dh);
-            ctx.globalAlpha = 1;
-            ctx.restore();
-            res();
-          };
-          img.onerror = res;
-          img.src = bg.src;
-        });
-      } else if (bg?.type === "color") {
-        ctx.fillStyle = bg.color;
-        ctx.fillRect(0, 0, sz.w, sz.h);
-      } else if (bg?.type === "gradient") {
-        // Convert CSS angle to canvas gradient coordinates
-        const angleRad = ((bg.angle - 90) * Math.PI) / 180;
-        const cx = sz.w / 2, cy = sz.h / 2;
-        const len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
-        const x0 = cx - Math.cos(angleRad) * len;
-        const y0 = cy - Math.sin(angleRad) * len;
-        const x1 = cx + Math.cos(angleRad) * len;
-        const y1 = cy + Math.sin(angleRad) * len;
-        const grad = ctx.createLinearGradient(x0, y0, x1, y1);
-        grad.addColorStop(0, bg.from);
-        grad.addColorStop(1, bg.to);
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, sz.w, sz.h);
-      }
-
-      // 3. Draw overlay images
-      for (const imgData of images) {
-        await new Promise((res) => {
-          const img = new window.Image();
-          img.onload = () => {
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(imgData.x, imgData.y, imgData.w, imgData.h);
-            ctx.clip();
-            const scale = Math.max(imgData.w / img.width, imgData.h / img.height);
-            const dw = img.width * scale, dh = img.height * scale;
-            const dx = imgData.x + (imgData.w - dw) * ((imgData.ox ?? 50) / 100);
-            const dy = imgData.y + (imgData.h - dh) * ((imgData.oy ?? 50) / 100);
-            ctx.drawImage(img, dx, dy, dw, dh);
-            ctx.restore();
-            res();
-          };
-          img.onerror = res;
-          img.src = imgData.src;
-        });
-      }
-
-      // 4. Draw text boxes — manual word-wrap to match on-screen rendering
-      const wrapText = (text, maxWidth, font) => {
-        ctx.font = font;
-        const allLines = [];
-        text.split("\n").forEach(paragraph => {
-          const words = paragraph.split(" ");
-          let line = "";
-          words.forEach(word => {
-            const test = line ? line + " " + word : word;
-            if (ctx.measureText(test).width > maxWidth && line) {
-              allLines.push(line);
-              line = word;
-            } else {
-              line = test;
-            }
-          });
-          allLines.push(line);
-        });
-        return allLines;
-      };
-
-      for (const box of liveTextBoxes) {
-        if (!box.text?.trim()) continue;
-        ctx.save();
-        const fontFamily = FONT_OPTIONS[box.font || "sans"].family.replace(/'/g, "");
-        const font = `${box.bold ? "700" : "400"} ${box.fontSize || 18}px ${fontFamily}`;
-        ctx.font = font;
-        ctx.fillStyle = box.color || "#ffffff";
-        const align = box.align || "left";
-        const boxW = Math.max(80, 600 - box.x - 16); // matches DOM width
-        const textPadLeft = 26; // matches DOM padding-left
-        const wrapWidth = boxW - textPadLeft - 4;
-        ctx.textAlign = align;
-        ctx.shadowColor = "rgba(0,0,0,0.8)";
-        ctx.shadowBlur = (box.style === "plain" || box.style === "pill") ? 0 : 8;
-
-        const lines = wrapText(box.text, wrapWidth, font);
-        const lineH = (box.fontSize || 18) * 1.5;
-
-        // Pill background sized to wrapped content
-        if (box.style === "pill") {
-          const boxH = lines.length * lineH + 12;
-          ctx.fillStyle = "rgba(0,0,0,0.55)";
-          ctx.shadowBlur = 0;
-          ctx.beginPath();
-          ctx.roundRect(box.x, box.y, boxW, boxH, 6);
-          ctx.fill();
-          ctx.fillStyle = box.color || "#ffffff";
-        }
-
-        const drawX = align === "left" ? box.x + textPadLeft
-          : align === "center" ? box.x + textPadLeft + wrapWidth / 2
-          : box.x + textPadLeft + wrapWidth;
-
-        lines.forEach((line, i) => {
-          ctx.fillText(line, drawX, box.y + (box.fontSize || 18) + i * lineH);
-        });
-        ctx.restore();
-      }
-
-      const dataUrl = canvas.toDataURL("image/png");
-
-      // Store compressed version for post manager
-      const jpgUrl = canvas.toDataURL("image/jpeg", 0.85);
-      try { localStorage.setItem("ambaig_last_image", jpgUrl); } catch (e) {}
-
-      // Trigger download
-      const link = document.createElement("a");
-      link.download = `ambaigdesigns-${Date.now()}.png`;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setToast("✅ Image saved! Check your Downloads folder.");
-      setTimeout(() => setToast(""), 3500);
-    } catch (err) {
-      console.error(err);
-      setToast("⚠️ Could not export. Screenshot the canvas manually.");
-      setTimeout(() => setToast(""), 4000);
-    }
-    setSaving(false);
-  };
-
-  // Read live text from DOM and sync into state — call before any navigation/export
-  const flushTextEdits = () => {
-    const liveBoxes = textBoxes.map(box => {
-      const domEl = canvasRef.current?.querySelector(`[data-textbox-id="${box.id}"] [data-text-content]`);
-      const liveText = domEl ? domEl.innerText : box.text;
-      return liveText !== box.text ? { ...box, text: liveText } : box;
+  // ── Flush text edits ──
+  const flushTextEdits = useCallback(() => {
+    const flushed = layers.map(l => {
+      if (l.type !== "text") return l;
+      const domEl = canvasRef.current?.querySelector(`[data-textbox-id="${l.id}"] [data-text-content]`);
+      const liveText = domEl ? domEl.innerText : l.text;
+      return liveText !== l.text ? { ...l, text: liveText } : l;
     });
-    setActiveEl(null); // also blurs any active edit
-    setTextBoxes(liveBoxes);
-    return liveBoxes;
-  };
+    setActiveEl(null);
+    set({ layers: flushed });
+    return flushed;
+  }, [layers]);
 
+  // ── Navigation ──
   const goToCaptions = () => {
-    const liveBoxes = flushTextEdits();
-    const firstText = liveBoxes[0]?.text || "";
-    const secondText = liveBoxes[1]?.text || "";
-    // Small delay so state write completes before navigation/localStorage save
-    setTimeout(() => {
-      router.push({
-        pathname: "/captions",
-        query: { title: firstText, description: secondText }
-      });
-    }, 50);
+    const flushed = flushTextEdits();
+    const firstText = flushed.find(l => l.type === "text")?.text || "";
+    const secondText = flushed.filter(l => l.type === "text")[1]?.text || "";
+    setTimeout(() => router.push({ pathname: "/captions", query: { title: firstText, description: secondText } }), 50);
   };
 
   const goToPost = () => {
@@ -774,60 +474,311 @@ export default function Home() {
     setTimeout(() => router.push("/post"), 50);
   };
 
+  // ── Download PNG ──
+  const downloadPNG = async () => {
+    setSaving(true);
+    const liveTextLayers = flushTextEdits();
+    await new Promise(r => setTimeout(r, 150));
+    try { if (document.fonts?.ready) await document.fonts.ready; } catch (e) {}
+
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = sz.w * 2; canvas.height = sz.h * 2;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(2, 2);
+
+      // White base
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, sz.w, sz.h);
+
+      // Background
+      if (bg?.type === "photo" && bg.src) {
+        await new Promise(res => { const img = new window.Image(); img.onload = () => { ctx.save(); ctx.globalAlpha = bgOpacity ?? 1; const sc = Math.max(sz.w / img.width, sz.h / img.height); const dw = img.width * sc, dh = img.height * sc; ctx.drawImage(img, (sz.w - dw) * (bg.ox / 100), (sz.h - dh) * (bg.oy / 100), dw, dh); ctx.globalAlpha = 1; ctx.restore(); res(); }; img.onerror = res; img.src = bg.src; });
+      } else if (bg?.type === "color") {
+        ctx.fillStyle = bg.color; ctx.fillRect(0, 0, sz.w, sz.h);
+      } else if (bg?.type === "gradient") {
+        const ar = ((bg.angle - 90) * Math.PI) / 180, cx = sz.w / 2, cy = sz.h / 2, len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
+        const g = ctx.createLinearGradient(cx - Math.cos(ar) * len, cy - Math.sin(ar) * len, cx + Math.cos(ar) * len, cy + Math.sin(ar) * len);
+        g.addColorStop(0, bg.from); g.addColorStop(1, bg.to); ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
+      }
+
+      // Draw layers in order
+      for (const layer of liveTextLayers) {
+        if (layer.visible === false) continue;
+
+        if (layer.type === "image") {
+          await new Promise(res => {
+            const img = new window.Image();
+            img.onload = () => {
+              ctx.save(); ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
+              const sc = Math.max(layer.w / img.width, layer.h / img.height), dw = img.width * sc, dh = img.height * sc;
+              ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
+              ctx.restore(); res();
+            };
+            img.onerror = res; img.src = layer.src;
+          });
+        }
+
+        if (layer.type === "sticker") {
+          ctx.save();
+          ctx.font = `${(layer.size || 60) * 0.75}px serif`;
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          if (layer.shadow) { ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 4; }
+          ctx.fillText(layer.emoji, layer.x + (layer.size || 60) / 2, layer.y + (layer.size || 60) / 2);
+          ctx.restore();
+        }
+
+        if (layer.type === "text" && layer.text?.trim()) {
+          ctx.save();
+          const fontFamily = FONT_OPTIONS[layer.font || "sans"].family.replace(/'/g, "");
+          const font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px ${fontFamily}`;
+          ctx.font = font; ctx.fillStyle = layer.color || "#fff";
+          ctx.textAlign = layer.align || "left";
+          ctx.shadowColor = "rgba(0,0,0,0.8)";
+          ctx.shadowBlur = (layer.style === "plain" || layer.style === "pill") ? 0 : 8;
+          if (layer.style === "pill") {
+            const lines = layer.text.split("\n"), lh = (layer.fontSize || 18) * 1.4;
+            ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 0;
+            ctx.beginPath(); ctx.roundRect(layer.x, layer.y, Math.max(80, 600 - layer.x - 16), lines.length * lh + 12, 6); ctx.fill();
+            ctx.fillStyle = layer.color || "#fff";
+          }
+          const boxW = Math.max(80, 600 - layer.x - 16), padLeft = 26, wrapW = boxW - padLeft - 4;
+          const drawX = (layer.align === "left") ? layer.x + padLeft : (layer.align === "center") ? layer.x + padLeft + wrapW / 2 : layer.x + padLeft + wrapW;
+          ctx.font = font;
+          const allLines = [];
+          layer.text.split("\n").forEach(para => {
+            const words = para.split(" "); let line = "";
+            words.forEach(word => { const t = line ? line + " " + word : word; if (ctx.measureText(t).width > wrapW && line) { allLines.push(line); line = word; } else line = t; });
+            allLines.push(line);
+          });
+          allLines.forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
+          ctx.restore();
+        }
+      }
+
+      const dataUrl = canvas.toDataURL("image/png");
+      try { localStorage.setItem("ambaig_last_image", canvas.toDataURL("image/jpeg", 0.85)); } catch (e) {}
+      const link = document.createElement("a");
+      link.download = `ambaigdesigns-${Date.now()}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      showToast("✅ Image saved! Check Downloads.");
+    } catch (err) {
+      console.error(err);
+      showToast("⚠️ Export failed. Try Chrome.");
+    }
+    setSaving(false);
+  };
+
+  // ── Save to gallery ──
+  const saveToGallery = async () => {
+    const flushed = flushTextEdits();
+    await new Promise(r => setTimeout(r, 100));
+    try { if (document.fonts?.ready) await document.fonts.ready; } catch (e) {}
+
+    try {
+      const c = document.createElement("canvas"); c.width = 300; c.height = Math.round(300 * (sz.h / sz.w));
+      const ctx = c.getContext("2d"); ctx.scale(300 / sz.w, c.height / sz.h);
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, sz.w, sz.h);
+      if (bg?.type === "color") { ctx.fillStyle = bg.color; ctx.fillRect(0, 0, sz.w, sz.h); }
+      else if (bg?.type === "gradient") {
+        const ar = ((bg.angle - 90) * Math.PI) / 180, cx2 = sz.w / 2, cy2 = sz.h / 2, len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
+        const g = ctx.createLinearGradient(cx2 - Math.cos(ar) * len, cy2 - Math.sin(ar) * len, cx2 + Math.cos(ar) * len, cy2 + Math.sin(ar) * len);
+        g.addColorStop(0, bg.from); g.addColorStop(1, bg.to); ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
+      }
+      const thumb = c.toDataURL("image/jpeg", 0.6);
+
+      const designs = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
+      const design = {
+        id: Date.now(), savedAt: new Date().toISOString(),
+        name: flushed.find(l => l.type === "text")?.text?.slice(0, 30) || `Design ${designs.length + 1}`,
+        thumb, state: { canvasSize, bg, bgOpacity, layers: flushed },
+      };
+      designs.unshift(design);
+      localStorage.setItem("ambaig_designs", JSON.stringify(designs.slice(0, 20)));
+      showToast("✅ Saved to My Designs");
+    } catch (e) { showToast("⚠️ Could not save to gallery."); }
+  };
+
+  // ── Clear canvas ──
+  const clearCanvas = () => {
+    if (!confirm("Clear canvas and start a new design?")) return;
+    dispatch({ type: "RESET", payload: { ...INIT_CANVAS } });
+    setActiveEl(null);
+    localStorage.removeItem("ambaig_canvas_state");
+    showToast("✅ Canvas cleared");
+  };
+
+  const activeLayer = activeEl ? layers.find(l => l.id === activeEl.id) : null;
+
   return (
     <div>
       <Head>
         <title>Design Studio — AmbaigDesigns</title>
-        <meta name="description" content="Create pins and mockups with backgrounds, photos, and text — free, no sign-up required." />
+        <meta name="description" content="Create pins and mockups with backgrounds, photos, text, and stickers." />
       </Head>
       <div className="page-header">
         <h1>Design Studio</h1>
-        <p>Build your pin — background, images, text — then caption and post.</p>
+        <p>Build your pin — background, images, stickers, text — then caption and post.</p>
       </div>
 
-      {/* ── Responsive layout ── */}
       <div className="studio-layout">
-
         {/* ── Left panel ── */}
         <div className="studio-panel">
+
+          {/* Undo / Redo */}
+          <div className="card" style={{ padding: "10px 12px" }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={undo} disabled={!past.length} title="Undo (Ctrl+Z)">↩ Undo</button>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={redo} disabled={!future.length} title="Redo (Ctrl+Y)">↪ Redo</button>
+              <button className="btn btn-ghost" style={{ padding: "8px", fontSize: "0.78rem" }} onClick={() => setShowLayerPanel(p => !p)} title="Layer panel">
+                {showLayerPanel ? "✕" : "☰"}
+              </button>
+            </div>
+          </div>
+
+          {/* Layer panel */}
+          {showLayerPanel && (
+            <div className="card">
+              <p className="plabel">Layers</p>
+              {layers.length === 0 && <p style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>No layers yet.</p>}
+              {[...layers].reverse().map((layer) => {
+                const isActive = activeEl?.id === layer.id;
+                const icon = layer.type === "image" ? "🖼" : layer.type === "sticker" ? layer.emoji : "T";
+                const label = layer.type === "text" ? (layer.text?.slice(0, 18) || "Text") : layer.type === "sticker" ? "Sticker" : "Image";
+                return (
+                  <div key={layer.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: "1px solid var(--border)", background: isActive ? "var(--accent-glow)" : "transparent", borderRadius: 4, marginBottom: 2 }}>
+                    <span style={{ width: 18, textAlign: "center", fontSize: "0.85rem", flexShrink: 0 }}>{icon}</span>
+                    <span onClick={() => setActiveEl({ type: layer.type, id: layer.id })} style={{ flex: 1, fontSize: "0.75rem", color: isActive ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                    <button onClick={() => updateLayer(layer.id, { visible: !(layer.visible !== false) })} title={layer.visible !== false ? "Hide" : "Show"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: layer.visible !== false ? "var(--text-muted)" : "var(--text-dim)" }}>{layer.visible !== false ? "👁" : "🚫"}</button>
+                    <button onClick={() => updateLayer(layer.id, { locked: !layer.locked })} title={layer.locked ? "Unlock" : "Lock"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-muted)" }}>{layer.locked ? "🔒" : "🔓"}</button>
+                    <button onClick={() => moveLayerUp(layer.id)} title="Move up" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-dim)" }}>↑</button>
+                    <button onClick={() => moveLayerDown(layer.id)} title="Move down" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-dim)" }}>↓</button>
+                    <button onClick={() => removeLayer(layer.id)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--danger)" }}>🗑</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Canvas size */}
           <div className="card">
             <p className="plabel">Canvas Size</p>
             {Object.entries(SIZES).map(([key, val]) => (
-              <button key={key} onClick={() => setCanvasSize(key)} style={{
-                display: "flex", justifyContent: "space-between", width: "100%",
-                padding: "6px 10px", borderRadius: 7, marginBottom: 5,
-                border: canvasSize === key ? "1px solid var(--accent)" : "1px solid var(--border)",
-                background: canvasSize === key ? "var(--accent-glow)" : "transparent",
-                color: canvasSize === key ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer", fontSize: "0.76rem", fontWeight: 500,
-              }}>
+              <button key={key} onClick={() => set({ canvasSize: key })} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "6px 10px", borderRadius: 7, marginBottom: 5, border: canvasSize === key ? "1px solid var(--accent)" : "1px solid var(--border)", background: canvasSize === key ? "var(--accent-glow)" : "transparent", color: canvasSize === key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontSize: "0.76rem", fontWeight: 500 }}>
                 <span style={{ textTransform: "capitalize" }}>{key}</span>
                 <span style={{ opacity: 0.7, fontSize: "0.7rem" }}>{val.label}</span>
               </button>
             ))}
           </div>
 
+          {/* Background */}
+          <div className="card">
+            <p className="plabel">Background</p>
+            <input type="file" accept="image/*" ref={bgFileRef} style={{ display: "none" }} onChange={addBg} />
+            <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+              {[{ key: "photo", label: "📷 Photo" }, { key: "color", label: "🎨 Color" }, { key: "gradient", label: "🌈 Gradient" }].map(t => (
+                <button key={t.key} onClick={() => setBgTab(t.key)} style={{ flex: 1, padding: "6px 4px", borderRadius: 7, fontSize: "0.68rem", fontWeight: 600, border: bgTab === t.key ? "1px solid var(--accent)" : "1px solid var(--border)", background: bgTab === t.key ? "var(--accent-glow)" : "transparent", color: bgTab === t.key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer" }}>{t.label}</button>
+              ))}
+            </div>
+
+            {bgTab === "photo" && (
+              bg?.type === "photo" ? (
+                <div>
+                  <div style={{ width: "100%", height: 70, borderRadius: 8, overflow: "hidden", marginBottom: 8, border: "1px solid var(--border)" }}><img src={bg.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: bgOpacity }} /></div>
+                  <label className="field-label">Opacity — {Math.round(bgOpacity * 100)}%</label>
+                  <input type="range" min="0.1" max="1" step="0.05" value={bgOpacity} onChange={e => set({ bgOpacity: Number(e.target.value) })} style={{ width: "100%", marginBottom: 8, accentColor: "var(--accent)" }} />
+                  <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: "0.78rem" }} onClick={() => bgFileRef.current?.click()}>🖼 Change Photo</button>
+                  <button onClick={() => set({ bg: null, bgOpacity: 1 })} style={{ width: "100%", marginTop: 6, padding: "4px", background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.7rem" }}>Remove background</button>
+                </div>
+              ) : (
+                <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => bgFileRef.current?.click()}>🖼 Upload Photo</button>
+              )
+            )}
+
+            {bgTab === "color" && (
+              <div>
+                <div style={{ width: "100%", height: 50, borderRadius: 8, marginBottom: 8, border: "1px solid var(--border)", background: bg?.type === "color" ? bg.color : "#1a1a24" }} />
+                <input type="color" value={bg?.type === "color" ? bg.color : "#222233"} onChange={e => set({ bg: { type: "color", color: e.target.value } })} style={{ width: "100%", height: 34, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", marginBottom: 8 }} />
+                <label className="field-label">Quick Colors</label>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+                  {[{ c: "#e60023", n: "Pinterest Red" }, { c: "#1877f2", n: "Facebook Blue" }, { c: "#833ab4", n: "Instagram" }, { c: "#000000", n: "Threads" }, { c: "#1a1a24", n: "Charcoal" }, { c: "#7c3aed", n: "Violet" }, { c: "#10b981", n: "Emerald" }, { c: "#f59e0b", n: "Amber" }, { c: "#ec4899", n: "Pink" }, { c: "#ffffff", n: "White" }].map(({ c, n }) => (
+                    <button key={c} onClick={() => set({ bg: { type: "color", color: c } })} title={n} style={{ width: 27, height: 27, borderRadius: 6, background: c, border: bg?.type === "color" && bg.color === c ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer" }} />
+                  ))}
+                </div>
+                {bg?.type === "color" && <button onClick={() => set({ bg: null })} style={{ width: "100%", padding: "4px", background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.7rem" }}>Remove background</button>}
+              </div>
+            )}
+
+            {bgTab === "gradient" && (
+              <div>
+                <div style={{ width: "100%", height: 50, borderRadius: 8, marginBottom: 8, border: "1px solid var(--border)", background: bg?.type === "gradient" ? `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` : "linear-gradient(135deg, #7c3aed, #ec4899)" }} />
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="field-label">From</label>
+                    <input type="color" value={bg?.type === "gradient" ? bg.from : "#7c3aed"} onChange={e => set({ bg: { type: "gradient", from: e.target.value, to: bg?.to || "#ec4899", angle: bg?.angle ?? 135 } })} style={{ width: "100%", height: 30, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="field-label">To</label>
+                    <input type="color" value={bg?.type === "gradient" ? bg.to : "#ec4899"} onChange={e => set({ bg: { type: "gradient", from: bg?.from || "#7c3aed", to: e.target.value, angle: bg?.angle ?? 135 } })} style={{ width: "100%", height: 30, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
+                  </div>
+                </div>
+                <label className="field-label">Angle — {bg?.type === "gradient" ? bg.angle : 135}°</label>
+                <input type="range" min="0" max="360" step="15" value={bg?.type === "gradient" ? bg.angle : 135} onChange={e => set({ bg: { type: "gradient", from: bg?.from || "#7c3aed", to: bg?.to || "#ec4899", angle: Number(e.target.value) } })} style={{ width: "100%", marginBottom: 8, accentColor: "var(--accent)" }} />
+                <label className="field-label">Brand Presets</label>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5, marginBottom: 8 }}>
+                  {[{ name: "Pinterest", from: "#e60023", to: "#ad081b", angle: 135 }, { name: "Instagram", from: "#833ab4", to: "#fd1d1d", angle: 135 }, { name: "Facebook", from: "#1877f2", to: "#0d5bc7", angle: 135 }, { name: "Sunset", from: "#f59e0b", to: "#ec4899", angle: 120 }, { name: "Ocean", from: "#0ea5e9", to: "#10b981", angle: 135 }, { name: "Midnight", from: "#1a1a24", to: "#374151", angle: 180 }, { name: "Royal", from: "#7c3aed", to: "#4c1d95", angle: 135 }, { name: "Peach", from: "#fbbf24", to: "#fb7185", angle: 120 }, { name: "Mint", from: "#34d399", to: "#0ea5e9", angle: 135 }].map(g => (
+                    <button key={g.name} onClick={() => set({ bg: { type: "gradient", from: g.from, to: g.to, angle: g.angle } })} title={g.name} style={{ height: 38, borderRadius: 7, background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`, border: bg?.type === "gradient" && bg.from === g.from ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer", position: "relative" }}>
+                      <span style={{ position: "absolute", bottom: 2, left: 3, right: 3, fontSize: "0.52rem", color: "white", textShadow: "0 1px 2px rgba(0,0,0,0.8)", fontWeight: 600 }}>{g.name}</span>
+                    </button>
+                  ))}
+                </div>
+                {bg?.type === "gradient" && <button onClick={() => set({ bg: null })} style={{ width: "100%", padding: "4px", background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.7rem" }}>Remove background</button>}
+              </div>
+            )}
+          </div>
+
+          {/* Stickers */}
+          <div className="card">
+            <p className="plabel">Stickers & Emojis</p>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+              {Object.keys(STICKER_SETS).map(k => (
+                <button key={k} onClick={() => setActiveStickerSet(k)} style={{ padding: "3px 7px", borderRadius: 6, fontSize: "0.65rem", border: activeStickerSet === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: activeStickerSet === k ? "var(--accent-glow)" : "transparent", color: activeStickerSet === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer" }}>
+                  {k.split(" ")[0]}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {STICKER_SETS[activeStickerSet].map(emoji => (
+                <button key={emoji} onClick={() => addSticker(emoji)} title={`Add ${emoji}`} style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", fontSize: "1.2rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.1s" }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Images */}
+          <div className="card">
+            <p className="plabel">Overlay Image</p>
+            <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImageLayer} />
+            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => imgFileRef.current?.click()}>+ Add Image Layer</button>
+            {layers.filter(l => l.type === "image").length > 0 && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>{layers.filter(l => l.type === "image").length} image(s)</p>}
+          </div>
+
           {/* Text on canvas */}
           <div className="card">
             <p className="plabel">Text on Canvas</p>
-
             {(() => {
-              const selectedBox = activeEl?.type === "text" ? textBoxes.find(b => b.id === activeEl.id) : null;
-              const isEditingExisting = !!selectedBox;
-
-              const curColor = isEditingExisting ? (selectedBox.color || "#ffffff") : textColor;
-              const curSize  = isEditingExisting ? (selectedBox.fontSize || 22) : fontSize;
-              const curAlign = isEditingExisting ? (selectedBox.align || "left") : textAlign;
-              const curStyle = isEditingExisting ? (selectedBox.style || "shadow") : textStyle;
-              const curBold  = isEditingExisting ? !!selectedBox.bold : textBold;
-              const curFont  = isEditingExisting ? (selectedBox.font || "sans") : textFont;
-
+              const selBox = activeLayer?.type === "text" ? activeLayer : null;
+              const isEditing = !!selBox;
+              const curColor = isEditing ? (selBox.color || "#fff") : textColor;
+              const curSize  = isEditing ? (selBox.fontSize || 22) : fontSize;
+              const curAlign = isEditing ? (selBox.align || "left") : textAlign;
+              const curStyle = isEditing ? (selBox.style || "shadow") : textStyle;
+              const curBold  = isEditing ? !!selBox.bold : textBold;
+              const curFont  = isEditing ? (selBox.font || "sans") : textFont;
               const apply = (patch) => {
-                if (isEditingExisting) {
-                  setTextBoxes(prev => prev.map(b => b.id === selectedBox.id ? { ...b, ...patch } : b));
-                } else {
+                if (isEditing) updateLayer(selBox.id, patch);
+                else {
                   if ("color" in patch) setTextColor(patch.color);
                   if ("fontSize" in patch) setFontSize(patch.fontSize);
                   if ("bold" in patch) setTextBold(patch.bold);
@@ -836,425 +787,94 @@ export default function Home() {
                   if ("font" in patch) setTextFont(patch.font);
                 }
               };
-
               return (
-                <div style={{
-                  marginBottom: 12, padding: "10px 12px", borderRadius: 10,
-                  background: isEditingExisting ? "var(--accent-glow)" : "var(--surface2)",
-                  border: isEditingExisting ? "1px solid var(--accent)" : "1px solid var(--border)",
-                }}>
-                  <p style={{ fontSize: "0.7rem", color: isEditingExisting ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>
-                    {isEditingExisting ? "✏️ Editing selected text" : "🎨 Text style (applies to next added text)"}
-                  </p>
-
-                  {/* Color + Size — always shown */}
+                <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: isEditing ? "var(--accent-glow)" : "var(--surface2)", border: isEditing ? "1px solid var(--accent)" : "1px solid var(--border)" }}>
+                  <p style={{ fontSize: "0.7rem", color: isEditing ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>{isEditing ? "✏️ Editing selected text" : "🎨 New text style"}</p>
                   <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                    <div style={{ flex: 1 }}>
-                      <label className="field-label">Color</label>
-                      <input type="color" value={curColor}
-                        onChange={e => apply({ color: e.target.value })}
-                        style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label className="field-label">Size</label>
-                      <select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>
-                        {[12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 48, 56, 64, 72].map(s => (
-                          <option key={s} value={s}>{s}px</option>
-                        ))}
-                      </select>
-                    </div>
+                    <div style={{ flex: 1 }}><label className="field-label">Color</label><input type="color" value={curColor} onChange={e => apply({ color: e.target.value })} style={{ width: "100%", height: 30, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} /></div>
+                    <div style={{ flex: 1 }}><label className="field-label">Size</label><select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>{[12,14,16,18,20,22,24,28,32,36,40,48,56,64,72].map(s => <option key={s} value={s}>{s}px</option>)}</select></div>
                   </div>
-
-                  {/* Font — always shown, each button rendered in its own face */}
                   <label className="field-label">Font</label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
-                    {Object.entries(FONT_OPTIONS).map(([key, f]) => (
-                      <button key={key} onClick={() => apply({ font: key })} style={{
-                        padding: "7px 4px", borderRadius: 6, fontSize: "0.85rem",
-                        border: curFont === key ? "1px solid var(--accent)" : "1px solid var(--border)",
-                        background: curFont === key ? "var(--accent-glow)" : "transparent",
-                        color: curFont === key ? "var(--accent)" : "var(--text-muted)",
-                        cursor: "pointer", fontFamily: f.family,
-                      }}>{f.label.split(" ")[0]}</button>
+                    {Object.entries(FONT_OPTIONS).map(([k, f]) => (
+                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "6px 4px", borderRadius: 6, fontSize: "0.85rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family }}>{f.label}</button>
                     ))}
                   </div>
-
-                  {/* Alignment — always shown */}
                   <label className="field-label">Alignment</label>
                   <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                    {["left","center","right"].map(a => (
-                      <button key={a} onClick={() => apply({ align: a })} style={{
-                        flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem",
-                        border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)",
-                        background: curAlign === a ? "var(--accent-glow)" : "transparent",
-                        color: curAlign === a ? "var(--accent)" : "var(--text-muted)",
-                        cursor: "pointer",
-                      }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>
-                    ))}
+                    {["left","center","right"].map(a => <button key={a} onClick={() => apply({ align: a })} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem", border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)", background: curAlign === a ? "var(--accent-glow)" : "transparent", color: curAlign === a ? "var(--accent)" : "var(--text-muted)", cursor: "pointer" }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>)}
                   </div>
-
-                  {/* Style — always shown */}
                   <label className="field-label">Style</label>
                   <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-                    {Object.keys(TEXT_STYLES).map(s => (
-                      <button key={s} onClick={() => apply({ style: s })} style={{
-                        flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.65rem", fontWeight: 600,
-                        border: curStyle === s ? "1px solid var(--accent)" : "1px solid var(--border)",
-                        background: curStyle === s ? "var(--accent-glow)" : "transparent",
-                        color: curStyle === s ? "var(--accent)" : "var(--text-muted)",
-                        cursor: "pointer", textTransform: "capitalize",
-                      }}>{s}</button>
-                    ))}
+                    {Object.keys(TEXT_STYLES).map(s => <button key={s} onClick={() => apply({ style: s })} style={{ flex: 1, padding: "4px 0", borderRadius: 6, fontSize: "0.62rem", fontWeight: 600, border: curStyle === s ? "1px solid var(--accent)" : "1px solid var(--border)", background: curStyle === s ? "var(--accent-glow)" : "transparent", color: curStyle === s ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", textTransform: "capitalize" }}>{s}</button>)}
                   </div>
-
-                  {/* Bold — always shown */}
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "0.8rem", color: "var(--text-muted)" }}>
                     <input type="checkbox" checked={curBold} onChange={e => apply({ bold: e.target.checked })} style={{ accentColor: "var(--accent)" }} /> Bold
                   </label>
-
-                  <p style={{ fontSize: "0.63rem", color: "var(--text-dim)", marginTop: 8 }}>
-                    {isEditingExisting ? "Changes apply to the selected text." : "Tap any text on canvas to edit it directly — these settings apply to new text."}
-                  </p>
                 </div>
               );
             })()}
-
-            <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: 8 }}>
-              {activeEl?.type === "text" ? "Add another:" : "Add text to canvas:"}
-            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true, textAlign, textStyle)}>
-                + Add Title
-              </button>
-              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false, textAlign, textStyle)}>
-                + Add Description
-              </button>
-              <button className="btn btn-ghost" style={{ justifyContent: "center" }}
-                onClick={() => addTextBox("Your text here", textColor, fontSize, textBold, textAlign, textStyle)}>
-                + Add Text Box
-              </button>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>+ Add Title</button>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false)}>+ Add Description</button>
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox()}>+ Add Text Box</button>
             </div>
-          </div>
-
-          {/* Background */}
-          <div className="card">
-            <p className="plabel">Background</p>
-            <input type="file" accept="image/*" ref={bgFileRef} style={{ display: "none" }} onChange={addBg} />
-
-            {/* Type tabs */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
-              {[
-                { key: "photo", label: "📷 Photo" },
-                { key: "color", label: "🎨 Color" },
-                { key: "gradient", label: "🌈 Gradient" },
-              ].map(t => (
-                <button key={t.key}
-                  onClick={() => setBgTab(t.key)}
-                  style={{
-                    flex: 1, padding: "6px 4px", borderRadius: 7, fontSize: "0.7rem", fontWeight: 600,
-                    border: bgTab === t.key ? "1px solid var(--accent)" : "1px solid var(--border)",
-                    background: bgTab === t.key ? "var(--accent-glow)" : "transparent",
-                    color: bgTab === t.key ? "var(--accent)" : "var(--text-muted)",
-                    cursor: "pointer",
-                  }}
-                >{t.label}</button>
-              ))}
-            </div>
-
-            {/* PHOTO tab */}
-            {bgTab === "photo" && (
-              bg?.type === "photo" ? (
-                <div>
-                  <div style={{ width: "100%", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 10, border: "1px solid var(--border)" }}>
-                    <img src={bg.src} alt="bg preview" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: bgOpacity }} />
-                  </div>
-                  <label className="field-label">Opacity — {Math.round(bgOpacity * 100)}%</label>
-                  <input type="range" min="0.1" max="1" step="0.05" value={bgOpacity}
-                    onChange={e => setBgOpacity(Number(e.target.value))}
-                    style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }} />
-                  <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: "0.78rem" }}
-                    onClick={() => bgFileRef.current?.click()}>
-                    🖼 Change Photo
-                  </button>
-                  <button onClick={() => { setBg(null); setBgOpacity(1); }}
-                    style={{ width: "100%", marginTop: 6, padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
-                    Remove background
-                  </button>
-                  <p style={{ fontSize: "0.65rem", color: "var(--text-dim)", marginTop: 6 }}>Drag image on canvas to pan.</p>
-                </div>
-              ) : (
-                <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }}
-                  onClick={() => bgFileRef.current?.click()}>
-                  🖼 Upload Photo
-                </button>
-              )
-            )}
-
-            {/* COLOR tab */}
-            {bgTab === "color" && (
-              <div>
-                <div style={{ width: "100%", height: 60, borderRadius: 8, marginBottom: 10, border: "1px solid var(--border)", background: bg?.type === "color" ? bg.color : "#1a1a24" }} />
-                <label className="field-label">Pick a color</label>
-                <input type="color"
-                  value={bg?.type === "color" ? bg.color : "#222233"}
-                  onChange={e => setBg({ type: "color", color: e.target.value })}
-                  style={{ width: "100%", height: 36, padding: 2, borderRadius: 7, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", marginBottom: 10 }}
-                />
-                {/* Quick swatches — platform brand colors + neutrals */}
-                <label className="field-label">Quick Colors</label>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                  {[
-                    { c: "#e60023", name: "Pinterest Red" },
-                    { c: "#1877f2", name: "Facebook Blue" },
-                    { c: "#833ab4", name: "Instagram Purple" },
-                    { c: "#000000", name: "Threads Black" },
-                    { c: "#1a1a24", name: "Charcoal" },
-                    { c: "#7c3aed", name: "Violet" },
-                    { c: "#10b981", name: "Emerald" },
-                    { c: "#f59e0b", name: "Amber" },
-                    { c: "#ec4899", name: "Pink" },
-                    { c: "#ffffff", name: "White" },
-                  ].map(({ c, name }) => (
-                    <button key={c} onClick={() => setBg({ type: "color", color: c })}
-                      title={name}
-                      style={{ width: 28, height: 28, borderRadius: 6, background: c, border: bg?.type === "color" && bg.color === c ? "2px solid var(--accent)" : "1px solid var(--border)", cursor: "pointer" }} />
-                  ))}
-                </div>
-                {bg?.type === "color" && (
-                  <button onClick={() => setBg(null)}
-                    style={{ width: "100%", padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
-                    Remove background
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* GRADIENT tab */}
-            {bgTab === "gradient" && (
-              <div>
-                <div style={{
-                  width: "100%", height: 60, borderRadius: 8, marginBottom: 10, border: "1px solid var(--border)",
-                  background: bg?.type === "gradient"
-                    ? `linear-gradient(${bg.angle || 135}deg, ${bg.from}, ${bg.to})`
-                    : "linear-gradient(135deg, #7c3aed, #ec4899)",
-                }} />
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <label className="field-label">From</label>
-                    <input type="color"
-                      value={bg?.type === "gradient" ? bg.from : "#7c3aed"}
-                      onChange={e => setBg(prev => ({ type: "gradient", from: e.target.value, to: prev?.type === "gradient" ? prev.to : "#ec4899", angle: prev?.type === "gradient" ? prev.angle : 135 }))}
-                      style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label className="field-label">To</label>
-                    <input type="color"
-                      value={bg?.type === "gradient" ? bg.to : "#ec4899"}
-                      onChange={e => setBg(prev => ({ type: "gradient", from: prev?.type === "gradient" ? prev.from : "#7c3aed", to: e.target.value, angle: prev?.type === "gradient" ? prev.angle : 135 }))}
-                      style={{ width: "100%", height: 32, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} />
-                  </div>
-                </div>
-                <label className="field-label">Angle — {bg?.type === "gradient" ? bg.angle : 135}°</label>
-                <input type="range" min="0" max="360" step="15"
-                  value={bg?.type === "gradient" ? bg.angle : 135}
-                  onChange={e => setBg(prev => ({ type: "gradient", from: prev?.type === "gradient" ? prev.from : "#7c3aed", to: prev?.type === "gradient" ? prev.to : "#ec4899", angle: Number(e.target.value) }))}
-                  style={{ width: "100%", marginBottom: 10, accentColor: "var(--accent)" }} />
-                {/* Brand-matched presets */}
-                <label className="field-label">Brand Presets</label>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
-                  {[
-                    { name: "Pinterest Red",   from: "#e60023", to: "#ad081b", angle: 135 },
-                    { name: "Instagram Glow",  from: "#833ab4", to: "#fd1d1d", angle: 135 },
-                    { name: "Facebook Blue",   from: "#1877f2", to: "#0d5bc7", angle: 135 },
-                    { name: "Sunset",          from: "#f59e0b", to: "#ec4899", angle: 120 },
-                    { name: "Ocean",           from: "#0ea5e9", to: "#10b981", angle: 135 },
-                    { name: "Midnight",        from: "#1a1a24", to: "#374151", angle: 180 },
-                    { name: "Royal Purple",    from: "#7c3aed", to: "#4c1d95", angle: 135 },
-                    { name: "Peach",           from: "#fbbf24", to: "#fb7185", angle: 120 },
-                    { name: "Mint",            from: "#34d399", to: "#0ea5e9", angle: 135 },
-                  ].map((g) => (
-                    <button key={g.name} onClick={() => setBg({ type: "gradient", from: g.from, to: g.to, angle: g.angle })}
-                      title={g.name}
-                      style={{
-                        height: 40, borderRadius: 7,
-                        background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`,
-                        border: bg?.type === "gradient" && bg.from === g.from && bg.to === g.to ? "2px solid var(--accent)" : "1px solid var(--border)",
-                        cursor: "pointer", position: "relative",
-                      }}
-                    >
-                      <span style={{ position: "absolute", bottom: 2, left: 4, right: 4, fontSize: "0.55rem", color: "white", textShadow: "0 1px 3px rgba(0,0,0,0.8)", textAlign: "left", fontWeight: 600, lineHeight: 1.2 }}>
-                        {g.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <label className="field-label">Custom</label>
-                {bg?.type === "gradient" && (
-                  <button onClick={() => setBg(null)}
-                    style={{ width: "100%", padding: "6px", borderRadius: 8, border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.72rem", textAlign: "center" }}>
-                    Remove background
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Overlay image */}
-          <div className="card">
-            <p className="plabel">Overlay Image</p>
-            <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImage} />
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => imgFileRef.current?.click()}>+ Add Image Layer</button>
-            {images.length > 0 && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>{images.length} image(s) on canvas</p>}
           </div>
 
           {/* Actions */}
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>
-            {saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}
-          </button>
-
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>
-            📤 Go to Post Manager →
-          </button>
-
-          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>
-            ✨ Generate Captions →
-          </button>
-
-          {/* New Design */}
-          <button
-            onClick={() => {
-              if (!confirm("Clear canvas and start a new design?")) return;
-              setTextBoxes([]);
-              setImages([]);
-              setBg(null);
-              setBgOpacity(1);
-              setActiveEl(null);
-              setCanvasSize("portrait");
-              localStorage.removeItem("ambaig_canvas_state");
-              setToast("✅ Canvas cleared — ready for new design");
-              setTimeout(() => setToast(""), 2500);
-            }}
-            style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem", textAlign: "center" }}
-          >
-            🗑 Clear & New Design
-          </button>
-
-        </div>{/* end panel */}
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>{saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}</button>
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={saveToGallery}>📁 Save to My Designs</button>
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>📤 Go to Post Manager →</button>
+          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>✨ Generate Captions →</button>
+          <button onClick={clearCanvas} style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}>🗑 Clear & New Design</button>
+        </div>
 
         {/* ── Canvas ── */}
         <div className="studio-canvas-wrap" ref={canvasWrapRef}>
           <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 8 }}>
-            Canvas — {sz.w}×{sz.h}px
-            {activeEl && <span style={{ color: "var(--accent)", marginLeft: 8 }}>· tap to deselect</span>}
+            Canvas — {sz.w}×{sz.h}px {past.length > 0 && <span style={{ color: "var(--text-dim)" }}>· {past.length} step{past.length > 1 ? "s" : ""} in history</span>}
           </p>
-          {/* Outer container matches scaled canvas size */}
-          <div
-            style={{ width: sz.w * canvasScale, height: sz.h * canvasScale, position: "relative", overflow: "hidden" }}
-            onClick={(e) => { if (e.target === e.currentTarget) setActiveEl(null); }}
-          >
-            {/* Scale wrapper — transforms 600px canvas to fit available width */}
+          <div style={{ width: sz.w * canvasScale, height: sz.h * canvasScale, position: "relative", overflow: "hidden" }} onClick={(e) => { if (e.target === e.currentTarget) setActiveEl(null); }}>
             <div style={{ transformOrigin: "top left", transform: `scale(${canvasScale})`, width: sz.w, height: sz.h }}>
-              <div
-                ref={canvasRef}
-                onClick={(e) => {
-                  const isElement = e.target.closest("[data-canvas-el]");
-                  if (!isElement) setActiveEl(null);
-                }}
-                style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}
-              >
-              {/* 1. Background — photo, solid color, or gradient */}
-              {bg?.type === "photo" && bg.src && (
-                <BgImage
-                  src={bg.src}
-                  ox={bg.ox} oy={bg.oy}
-                  opacity={bgOpacity}
-                  onPan={(ox, oy) => setBg(b => ({ ...b, ox, oy }))}
-                />
-              )}
-              {bg?.type === "color" && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 1, background: bg.color }} />
-              )}
-              {bg?.type === "gradient" && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 1, background: `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` }} />
-              )}
+              <div ref={canvasRef} onClick={(e) => { if (!e.target.closest("[data-canvas-el]")) setActiveEl(null); }} style={{ position: "relative", width: sz.w, height: sz.h, overflow: "hidden", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}>
 
-              {/* 3. Overlay images */}
-              {images.map(img => (
-                <CanvasImage key={img.id} img={img} canvasRef={canvasRef}
-                  scale={canvasScale}
-                  selected={activeEl?.type === "img" && activeEl.id === img.id}
-                  onSelect={() => setActiveEl({ type: "img", id: img.id })}
-                  onUpdate={patch => setImages(prev => prev.map(i => i.id === img.id ? { ...i, ...patch } : i))}
-                  onRemove={() => { setImages(prev => prev.filter(i => i.id !== img.id)); setActiveEl(null); }}
-                />
-              ))}
+                {/* Background */}
+                {bg?.type === "photo" && bg.src && <BgImage src={bg.src} ox={bg.ox} oy={bg.oy} opacity={bgOpacity} onPan={(ox, oy) => set({ bg: { ...bg, ox, oy } })} />}
+                {bg?.type === "color" && <div style={{ position: "absolute", inset: 0, zIndex: 1, background: bg.color }} />}
+                {bg?.type === "gradient" && <div style={{ position: "absolute", inset: 0, zIndex: 1, background: `linear-gradient(${bg.angle}deg, ${bg.from}, ${bg.to})` }} />}
 
-              {/* 4. Text boxes */}
-              {textBoxes.map(box => (
-                <TextBox key={box.id} box={box} canvasRef={canvasRef}
-                  scale={canvasScale}
-                  selected={activeEl?.type === "text" && activeEl.id === box.id}
-                  onSelect={() => setActiveEl({ type: "text", id: box.id })}
-                  onUpdate={patch => setTextBoxes(prev => prev.map(b => b.id === box.id ? { ...b, ...patch } : b))}
-                  onRemove={() => { setTextBoxes(prev => prev.filter(b => b.id !== box.id)); setActiveEl(null); }}
-                />
-              ))}
-            </div>{/* end canvasRef */}
-            </div>{/* end scale div */}
-          </div>{/* end outer container */}
-          <p style={{ marginTop: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>
-            💡 Single tap to select & move · Double tap to edit text · Tap canvas to deselect
-          </p>
-        </div>{/* end studio-canvas-wrap */}
-      </div>{/* end studio-layout */}
+                {/* Layers in order */}
+                {layers.map(layer => {
+                  if (layer.visible === false && activeEl?.id !== layer.id) return null;
+                  const isSelected = activeEl?.id === layer.id;
+                  if (layer.locked && !isSelected) return (
+                    <div key={layer.id} data-canvas-el={layer.type} style={{ position: "absolute", left: layer.x, top: layer.y, pointerEvents: "none", opacity: layer.visible !== false ? 1 : 0 }}>
+                      {layer.type === "sticker" && <span style={{ fontSize: (layer.size || 60) * 0.75 }}>{layer.emoji}</span>}
+                    </div>
+                  );
+                  const commonProps = { key: layer.id, canvasRef, scale: canvasScale, selected: isSelected, onSelect: () => setActiveEl({ type: layer.type, id: layer.id }), onUpdate: (patch) => updateLayer(layer.id, patch), onRemove: () => removeLayer(layer.id) };
+                  if (layer.type === "image")   return <ImageLayer   {...commonProps} layer={layer} />;
+                  if (layer.type === "sticker") return <StickerLayer {...commonProps} layer={layer} />;
+                  if (layer.type === "text")    return <TextLayer    {...commonProps} layer={layer} />;
+                  return null;
+                })}
+              </div>
+            </div>
+          </div>
+          <p style={{ marginTop: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>💡 Tap to select · Double-tap text to edit · Pinch images to resize · ☰ for layer panel · Ctrl+Z to undo</p>
+        </div>
+      </div>
 
       <Toast msg={toast} />
 
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
-
-        /* Desktop: panel forms a column extending the sidebar; canvas fills the rest */
-        .studio-layout {
-          display: flex;
-          flex-direction: row;
-          gap: 16px;
-          padding: 0 16px 80px;
-          align-items: flex-start;
-        }
-        .studio-panel {
-          width: 240px;
-          min-width: 220px;
-          flex-shrink: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          position: sticky;
-          top: 16px;
-          max-height: calc(100vh - 32px);
-          overflow-y: auto;
-        }
-        .studio-canvas-wrap {
-          flex: 1;
-          min-width: 0;
-          width: 100%;
-        }
-
-        /* Mobile: stack vertically, panel above canvas, full width, not sticky */
+        .studio-layout { display: flex; flex-direction: row; gap: 16px; padding: 0 16px 80px; align-items: flex-start; }
+        .studio-panel { width: 240px; min-width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+        .studio-canvas-wrap { flex: 1; min-width: 0; }
         @media (max-width: 768px) {
-          .studio-layout {
-            flex-direction: column;
-            padding: 0 10px 80px;
-            gap: 12px;
-          }
-          .studio-panel {
-            width: 100%;
-            position: static;
-            max-height: none;
-            overflow-y: visible;
-          }
+          .studio-layout { flex-direction: column; padding: 0 10px 80px; gap: 12px; }
+          .studio-panel { width: 100%; position: static; max-height: none; overflow-y: visible; }
         }
       `}</style>
     </div>
