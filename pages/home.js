@@ -103,13 +103,59 @@ function useDragLayer({ layer, onUpdate, canvasRef, scale }) {
   return startDrag;
 }
 
+// ── Rotate helper ────────────────────────────────────────────────
+function useRotate({ layer, onUpdate }) {
+  const startRotate = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const cx = layer.x + (layer.w || layer.size || 60) / 2;
+    const cy = layer.y + (layer.h || layer.size || 60) / 2;
+    const startAngle = layer.rotation || 0;
+    const pt = e.touches ? e.touches[0] : e;
+    const startMouseAngle = Math.atan2(pt.clientY - cy, pt.clientX - cx) * (180 / Math.PI);
+
+    const move = (ev) => {
+      ev.preventDefault();
+      const p = ev.touches ? ev.touches[0] : ev;
+      const currentAngle = Math.atan2(p.clientY - cy, p.clientX - cx) * (180 / Math.PI);
+      let rotation = startAngle + (currentAngle - startMouseAngle);
+      // Snap to 15° increments when holding shift (or close to 0/90/180/270)
+      if (ev.shiftKey) rotation = Math.round(rotation / 15) * 15;
+      onUpdate({ rotation: rotation % 360 });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
+    };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
+  };
+  return startRotate;
+}
+
+function RotateHandle({ onMouseDown, onTouchStart }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+      title="Drag to rotate (Shift = snap to 15°)"
+      style={{
+        position: "absolute", top: -22, left: "50%", transform: "translateX(-50%)",
+        width: 18, height: 18, background: "#f59e0b", borderRadius: "50%",
+        cursor: "grab", zIndex: 30, border: "2px solid white",
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9,
+      }}
+    >🔄</div>
+  );
+}
+
 // ── Sticker layer ────────────────────────────────────────────────
 function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
   const startDrag = useDragLayer({ layer, onUpdate, canvasRef, scale });
+  const startRotate = useRotate({ layer, onUpdate });
 
   const startResize = (e) => {
     e.stopPropagation();
-    const rect = canvasRef.current?.getBoundingClientRect();
     const s = scale || 1;
     const cx = e.touches ? e.touches[0].clientX : e.clientX;
     const startSize = layer.size || 60;
@@ -122,6 +168,8 @@ function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
+
+  const rotation = layer.rotation || 0;
 
   return (
     <div
@@ -136,6 +184,8 @@ function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect
         outline: selected ? "2px dashed #c084fc" : "2px dashed transparent",
         borderRadius: 4, zIndex: 18,
         opacity: layer.visible === false ? 0 : 1,
+        transform: `rotate(${rotation}deg)`,
+        transformOrigin: "center center",
       }}
     >
       <span style={{ fontSize: (layer.size || 60) * 0.75, lineHeight: 1, pointerEvents: "none", filter: layer.shadow ? "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" : "none" }}>
@@ -145,6 +195,7 @@ function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
             style={{ position: "absolute", top: -10, left: -10, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
+          <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
           <div onMouseDown={startResize} onTouchStart={startResize}
             style={{ position: "absolute", bottom: -6, right: -6, width: 16, height: 16, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize", zIndex: 30, border: "2px solid white" }} />
         </>
@@ -174,6 +225,8 @@ function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, s
 
   const style = TEXT_STYLES[layer.style || "shadow"];
   const fontFamily = FONT_OPTIONS[layer.font || "sans"].family;
+  const startRotate = useRotate({ layer, onUpdate });
+  const rotation = layer.rotation || 0;
 
   return (
     <div
@@ -181,12 +234,13 @@ function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, s
       onTouchStart={(e) => { if (!editing) { onSelect(); startDrag(e); } }}
       onDoubleClick={handleDoubleClick}
       data-canvas-el="text" data-textbox-id={layer.id}
-      style={{ position: "absolute", left: layer.x, top: layer.y, width: Math.max(80, 600 - layer.x - 16), cursor: editing ? "text" : "move", outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent", borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none", zIndex: 20, opacity: layer.visible === false ? 0 : 1 }}
+      style={{ position: "absolute", left: layer.x, top: layer.y, width: Math.max(80, 600 - layer.x - 16), cursor: editing ? "text" : "move", outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent", borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none", zIndex: 20, opacity: layer.visible === false ? 0 : 1, transform: `rotate(${rotation}deg)`, transformOrigin: "center center" }}
     >
       {selected && !editing && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
             style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
           <div style={{ position: "absolute", bottom: -14, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>double-tap to edit</div>
         </>
       )}
@@ -257,17 +311,21 @@ function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, 
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
+  const startRotate = useRotate({ layer, onUpdate });
+  const rotation = layer.rotation || 0;
+
   return (
     <div onMouseDown={startDrag} onTouchStart={(e) => { if (e.touches.length === 2) { onSelect(); startPinch(e); } else startDrag(e); }} data-canvas-el="img"
-      style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, cursor: mode === "crop" ? "crosshair" : "move", outline: selected ? "2px solid #c084fc" : "2px solid transparent", userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15, opacity: layer.visible === false ? 0 : 1 }}
+      style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, cursor: mode === "crop" ? "crosshair" : "move", outline: selected ? "2px solid #c084fc" : "2px solid transparent", userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15, opacity: layer.visible === false ? 0 : 1, transform: `rotate(${rotation}deg)`, transformOrigin: "center center" }}
     >
       <img src={layer.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
       {selected && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }} style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
           <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }} style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>{mode === "move" ? "✂" : "↔"}</button>
+          <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
           <div onMouseDown={startResize} onTouchStart={startResize} style={{ position: "absolute", bottom: 4, right: 4, width: 22, height: 22, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 10, color: "white", pointerEvents: "none" }}>⤡</span></div>
-          <div style={{ position: "absolute", bottom: 4, left: 34, background: "rgba(0,0,0,0.6)", color: "white", fontSize: 8, padding: "2px 5px", borderRadius: 3, pointerEvents: "none", whiteSpace: "nowrap" }}>{mode === "crop" ? "drag to pan" : "pinch to resize"}</div>
+          <div style={{ position: "absolute", bottom: 4, left: 34, background: "rgba(0,0,0,0.6)", color: "white", fontSize: 8, padding: "2px 5px", borderRadius: 3, pointerEvents: "none", whiteSpace: "nowrap" }}>{mode === "crop" ? "drag to pan" : "pinch/⤡ to resize"}</div>
         </>
       )}
     </div>
@@ -501,6 +559,19 @@ export default function Home() {
         g.addColorStop(0, bg.from); g.addColorStop(1, bg.to); ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
       }
 
+      // Helper: apply rotation transform around layer center
+      const withRotation = (layer, w, h, fn) => {
+        const rot = (layer.rotation || 0) * Math.PI / 180;
+        if (rot === 0) { fn(); return; }
+        const cx = layer.x + w / 2, cy = layer.y + h / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        ctx.translate(-cx, -cy);
+        fn();
+        ctx.restore();
+      };
+
       // Draw layers in order
       for (const layer of liveTextLayers) {
         if (layer.visible === false) continue;
@@ -509,49 +580,64 @@ export default function Home() {
           await new Promise(res => {
             const img = new window.Image();
             img.onload = () => {
-              ctx.save(); ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
-              const sc = Math.max(layer.w / img.width, layer.h / img.height), dw = img.width * sc, dh = img.height * sc;
-              ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
-              ctx.restore(); res();
+              withRotation(layer, layer.w, layer.h, () => {
+                ctx.save();
+                ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
+                const sc = Math.max(layer.w / img.width, layer.h / img.height);
+                const dw = img.width * sc, dh = img.height * sc;
+                ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
+                ctx.restore();
+              });
+              res();
             };
             img.onerror = res; img.src = layer.src;
           });
         }
 
         if (layer.type === "sticker") {
-          ctx.save();
-          ctx.font = `${(layer.size || 60) * 0.75}px serif`;
-          ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          if (layer.shadow) { ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 4; }
-          ctx.fillText(layer.emoji, layer.x + (layer.size || 60) / 2, layer.y + (layer.size || 60) / 2);
-          ctx.restore();
+          withRotation(layer, layer.size || 60, layer.size || 60, () => {
+            ctx.save();
+            // Use a larger font for better emoji rendering
+            const emojiSize = Math.round((layer.size || 60) * 0.75);
+            ctx.font = `${emojiSize}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            if (layer.shadow) { ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 6; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 1; }
+            ctx.fillStyle = "black"; // required for some browsers to render color emoji
+            ctx.fillText(layer.emoji, layer.x + (layer.size || 60) / 2, layer.y + (layer.size || 60) / 2);
+            ctx.restore();
+          });
         }
 
         if (layer.type === "text" && layer.text?.trim()) {
-          ctx.save();
-          const fontFamily = FONT_OPTIONS[layer.font || "sans"].family.replace(/'/g, "");
-          const font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px ${fontFamily}`;
-          ctx.font = font; ctx.fillStyle = layer.color || "#fff";
-          ctx.textAlign = layer.align || "left";
-          ctx.shadowColor = "rgba(0,0,0,0.8)";
-          ctx.shadowBlur = (layer.style === "plain" || layer.style === "pill") ? 0 : 8;
-          if (layer.style === "pill") {
-            const lines = layer.text.split("\n"), lh = (layer.fontSize || 18) * 1.4;
-            ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 0;
-            ctx.beginPath(); ctx.roundRect(layer.x, layer.y, Math.max(80, 600 - layer.x - 16), lines.length * lh + 12, 6); ctx.fill();
-            ctx.fillStyle = layer.color || "#fff";
-          }
-          const boxW = Math.max(80, 600 - layer.x - 16), padLeft = 26, wrapW = boxW - padLeft - 4;
-          const drawX = (layer.align === "left") ? layer.x + padLeft : (layer.align === "center") ? layer.x + padLeft + wrapW / 2 : layer.x + padLeft + wrapW;
-          ctx.font = font;
-          const allLines = [];
-          layer.text.split("\n").forEach(para => {
-            const words = para.split(" "); let line = "";
-            words.forEach(word => { const t = line ? line + " " + word : word; if (ctx.measureText(t).width > wrapW && line) { allLines.push(line); line = word; } else line = t; });
-            allLines.push(line);
+          const boxW = Math.max(80, 600 - layer.x - 16);
+          const estimatedH = (layer.fontSize || 18) * 1.5 * (layer.text.split("\n").length + 2);
+          withRotation(layer, boxW, estimatedH, () => {
+            ctx.save();
+            const fontFamily = FONT_OPTIONS[layer.font || "sans"].family.replace(/'/g, "");
+            const font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px ${fontFamily}`;
+            ctx.font = font; ctx.fillStyle = layer.color || "#fff";
+            ctx.textAlign = layer.align || "left";
+            ctx.shadowColor = "rgba(0,0,0,0.8)";
+            ctx.shadowBlur = (layer.style === "plain" || layer.style === "pill") ? 0 : 8;
+            if (layer.style === "pill") {
+              const lines = layer.text.split("\n"), lh = (layer.fontSize || 18) * 1.4;
+              ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 0;
+              ctx.beginPath(); ctx.roundRect(layer.x, layer.y, boxW, lines.length * lh + 12, 6); ctx.fill();
+              ctx.fillStyle = layer.color || "#fff";
+            }
+            const padLeft = 26, wrapW = boxW - padLeft - 4;
+            const drawX = (layer.align === "left") ? layer.x + padLeft : (layer.align === "center") ? layer.x + padLeft + wrapW / 2 : layer.x + padLeft + wrapW;
+            ctx.font = font;
+            const allLines = [];
+            layer.text.split("\n").forEach(para => {
+              const words = para.split(" "); let line = "";
+              words.forEach(word => { const t = line ? line + " " + word : word; if (ctx.measureText(t).width > wrapW && line) { allLines.push(line); line = word; } else line = t; });
+              allLines.push(line);
+            });
+            allLines.forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
+            ctx.restore();
           });
-          allLines.forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
-          ctx.restore();
         }
       }
 
@@ -572,21 +658,88 @@ export default function Home() {
   // ── Save to gallery ──
   const saveToGallery = async () => {
     const flushed = flushTextEdits();
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 150));
     try { if (document.fonts?.ready) await document.fonts.ready; } catch (e) {}
 
     try {
-      const c = document.createElement("canvas"); c.width = 300; c.height = Math.round(300 * (sz.h / sz.w));
-      const ctx = c.getContext("2d"); ctx.scale(300 / sz.w, c.height / sz.h);
-      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, sz.w, sz.h);
-      if (bg?.type === "color") { ctx.fillStyle = bg.color; ctx.fillRect(0, 0, sz.w, sz.h); }
-      else if (bg?.type === "gradient") {
-        const ar = ((bg.angle - 90) * Math.PI) / 180, cx2 = sz.w / 2, cy2 = sz.h / 2, len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
-        const g = ctx.createLinearGradient(cx2 - Math.cos(ar) * len, cy2 - Math.sin(ar) * len, cx2 + Math.cos(ar) * len, cy2 + Math.sin(ar) * len);
-        g.addColorStop(0, bg.from); g.addColorStop(1, bg.to); ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
-      }
-      const thumb = c.toDataURL("image/jpeg", 0.6);
+      // Render a proper thumbnail at 300px wide
+      const thumbW = 300;
+      const thumbH = Math.round(thumbW * (sz.h / sz.w));
+      const c = document.createElement("canvas");
+      c.width = thumbW; c.height = thumbH;
+      const ctx = c.getContext("2d");
+      // Scale so all coordinates in sz.w/sz.h space map to thumbnail
+      const scaleX = thumbW / sz.w, scaleY = thumbH / sz.h;
+      ctx.scale(scaleX, scaleY);
 
+      // White base
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, sz.w, sz.h);
+
+      // Background
+      if (bg?.type === "photo" && bg.src) {
+        await new Promise(res => {
+          const img = new window.Image();
+          img.onload = () => {
+            const sc = Math.max(sz.w / img.width, sz.h / img.height);
+            const dw = img.width * sc, dh = img.height * sc;
+            ctx.drawImage(img, (sz.w - dw) * (bg.ox / 100), (sz.h - dh) * (bg.oy / 100), dw, dh);
+            res();
+          };
+          img.onerror = res; img.src = bg.src;
+        });
+      } else if (bg?.type === "color") {
+        ctx.fillStyle = bg.color; ctx.fillRect(0, 0, sz.w, sz.h);
+      } else if (bg?.type === "gradient") {
+        const ar = ((bg.angle - 90) * Math.PI) / 180;
+        const cx2 = sz.w / 2, cy2 = sz.h / 2, len = Math.sqrt(sz.w * sz.w + sz.h * sz.h) / 2;
+        const g = ctx.createLinearGradient(cx2 - Math.cos(ar) * len, cy2 - Math.sin(ar) * len, cx2 + Math.cos(ar) * len, cy2 + Math.sin(ar) * len);
+        g.addColorStop(0, bg.from); g.addColorStop(1, bg.to);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
+      }
+
+      // Draw image layers
+      for (const layer of flushed) {
+        if (layer.visible === false || layer.type !== "image") continue;
+        await new Promise(res => {
+          const img = new window.Image();
+          img.onload = () => {
+            ctx.save();
+            if (layer.rotation) { const cx = layer.x + layer.w / 2, cy = layer.y + layer.h / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
+            ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
+            const sc = Math.max(layer.w / img.width, layer.h / img.height), dw = img.width * sc, dh = img.height * sc;
+            ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
+            ctx.restore(); res();
+          };
+          img.onerror = res; img.src = layer.src;
+        });
+      }
+
+      // Draw stickers and text
+      for (const layer of flushed) {
+        if (layer.visible === false) continue;
+        if (layer.type === "sticker") {
+          ctx.save();
+          if (layer.rotation) { const cx = layer.x + (layer.size || 60) / 2, cy = layer.y + (layer.size || 60) / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
+          ctx.font = `${Math.round((layer.size || 60) * 0.75)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",serif`;
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillStyle = "black";
+          ctx.fillText(layer.emoji, layer.x + (layer.size || 60) / 2, layer.y + (layer.size || 60) / 2);
+          ctx.restore();
+        }
+        if (layer.type === "text" && layer.text?.trim()) {
+          ctx.save();
+          if (layer.rotation) { const tw = Math.max(80, 600 - layer.x - 16), th = (layer.fontSize || 18) * 2; const cx = layer.x + tw / 2, cy = layer.y + th / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
+          ctx.font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px sans-serif`;
+          ctx.fillStyle = layer.color || "#fff";
+          ctx.textAlign = layer.align || "left";
+          ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6;
+          const padLeft = 26, drawX = layer.x + padLeft;
+          layer.text.split("\n").forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
+          ctx.restore();
+        }
+      }
+
+      const thumb = c.toDataURL("image/jpeg", 0.7);
       const designs = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
       const design = {
         id: Date.now(), savedAt: new Date().toISOString(),
@@ -596,7 +749,10 @@ export default function Home() {
       designs.unshift(design);
       localStorage.setItem("ambaig_designs", JSON.stringify(designs.slice(0, 20)));
       showToast("✅ Saved to My Designs");
-    } catch (e) { showToast("⚠️ Could not save to gallery."); }
+    } catch (e) {
+      console.error(e);
+      showToast("⚠️ Could not save to gallery.");
+    }
   };
 
   // ── Clear canvas ──
