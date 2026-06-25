@@ -36,12 +36,29 @@ export default function Captions() {
   }, []);
 
   const { title, description } = router.query;
-  const [captions, setCaptions]         = useState({ pinterest: "", facebook: "", instagram: "", threads: "" });
-  const [loading, setLoading]           = useState(false);
-  const [generated, setGenerated]       = useState(false);
-  const [copied, setCopied]             = useState({});
+  const [captions, setCaptions]           = useState({ pinterest: "", facebook: "", instagram: "", threads: "" });
+  const [loading, setLoading]             = useState(false);
+  const [generated, setGenerated]         = useState(false);
+  const [copied, setCopied]               = useState({});
   const [addedToCanvas, setAddedToCanvas] = useState({});
-  const [toast, setToast]               = useState("");
+  const [toast, setToast]                 = useState("");
+  const [lang, setLang]                   = useState("english");
+  const [tone, setTone]                   = useState("engaging");
+
+  const LANGS = [
+    { key: "english",    label: "English",       flag: "🇬🇧" },
+    { key: "urdu",       label: "اردو",           flag: "🇵🇰" },
+    { key: "roman_urdu", label: "Roman Urdu",     flag: "🇵🇰" },
+    { key: "bilingual",  label: "Urdu + English", flag: "🌐" },
+  ];
+
+  const TONES = [
+    { key: "engaging",      label: "Engaging"      },
+    { key: "professional",  label: "Professional"  },
+    { key: "playful",       label: "Playful"       },
+    { key: "minimal",       label: "Minimal"       },
+    { key: "inspirational", label: "Inspirational" },
+  ];
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
@@ -53,13 +70,12 @@ export default function Captions() {
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title, description, lang, tone }),
       });
       const data = await res.json();
       setCaptions(data);
       setGenerated(true);
     } catch {
-      // Fallback captions when API unavailable
       setCaptions({
         pinterest: `✨ ${title || "Design"} — ${description || ""} Save this for later! #Inspiration #Design #Creative`,
         facebook:  `Check out this ${title || "design"}! ${description || ""} What do you think? 👇`,
@@ -161,14 +177,15 @@ export default function Captions() {
                   {/* Layers (new unified format) */}
                   {canvasState?.layers?.map(layer => {
                     if (layer.visible === false) return null;
+                    const rot = layer.rotation ? `rotate(${layer.rotation}deg)` : undefined;
                     if (layer.type === "image") return (
-                      <img key={layer.id} src={layer.src} alt="" style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, borderRadius: 4 }} />
+                      <img key={layer.id} src={layer.src} alt="" style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, borderRadius: 4, transform: rot, transformOrigin: "center center" }} />
                     );
                     if (layer.type === "sticker") return (
-                      <span key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, fontSize: (layer.size || 60) * 0.75, lineHeight: 1 }}>{layer.emoji}</span>
+                      <span key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, fontSize: (layer.size || 60) * 0.75, lineHeight: 1, display: "inline-block", transform: rot, transformOrigin: "center center" }}>{layer.emoji}</span>
                     );
                     if (layer.type === "text") return (
-                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%" }}>{layer.text}</div>
+                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%", transform: rot, transformOrigin: "center center" }}>{layer.text}</div>
                     );
                     return null;
                   })}
@@ -207,6 +224,38 @@ export default function Captions() {
 
         {/* ── Right: caption cards ── */}
         <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 12 }}>
+
+          {/* Language selector */}
+          <div className="card" style={{ padding: "12px 14px" }}>
+            <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Language</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
+              {LANGS.map(({ key, label, flag }) => (
+                <button key={key} onClick={() => setLang(key)} style={{
+                  padding: "7px 8px", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600, textAlign: "left",
+                  border: lang === key ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: lang === key ? "var(--accent-glow)" : "transparent",
+                  color: lang === key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span>{flag}</span><span>{label}</span>
+                </button>
+              ))}
+            </div>
+
+            <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Tone</p>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {TONES.map(({ key, label }) => (
+                <button key={key} onClick={() => setTone(key)} style={{
+                  padding: "5px 10px", borderRadius: 7, fontSize: "0.72rem", fontWeight: 600,
+                  border: tone === key ? "1px solid var(--accent)" : "1px solid var(--border)",
+                  background: tone === key ? "var(--accent-glow)" : "transparent",
+                  color: tone === key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer",
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <p style={{ fontWeight: 600, fontSize: "0.875rem", color: loading ? "var(--text-muted)" : "var(--text)" }}>
