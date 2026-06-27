@@ -6,40 +6,53 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Title or description required" });
   }
 
-  // Language instruction
-  const LANG_MAP = {
-    english:     "Write all captions in English.",
-    urdu:        "Write all captions in Urdu script (اردو). Use proper Urdu vocabulary appropriate for social media.",
-    roman_urdu:  "Write all captions in Roman Urdu (Urdu words written in English letters, e.g. 'Bohat khoobsurat design hai!'). This is how Pakistani users commonly type on social media.",
-    bilingual:   "Write each caption starting with one sentence in Urdu script, then continue in English. Mix both languages naturally as Pakistani social media users do.",
+  // Very explicit language instructions with examples
+  const LANG_INSTRUCTIONS = {
+    english: `Write ALL captions entirely in English.`,
+
+    urdu: `Write ALL captions entirely in Urdu script (اردو). Do NOT include any English words except brand names or hashtags.
+Example style: "یہ ڈیزائن بہت خوبصورت ہے! اپنے دوستوں کے ساتھ شیئر کریں۔ #ڈیزائن #تخلیق"`,
+
+    roman_urdu: `Write ALL captions entirely in Roman Urdu — Urdu language written with English alphabet letters. Do NOT write in Urdu script. Do NOT write in English.
+Example style: "Yeh design bohot khoobsurat hai! Apne doston ke saath share karo. Save kar lo baad ke liye! #Design #Creative"`,
+
+    bilingual: `Write ALL captions in a MIX of Urdu script AND English — switching between both languages in the same caption, exactly how Pakistani social media users write.
+IMPORTANT: Every caption MUST contain both Urdu script words AND English words mixed together.
+Example style: "یہ design واقعی bohot amazing ہے! Save کریں for later اور اپنے friends کو بھی share کریں! ✨ #Design #تخلیق #Creative"`,
   };
 
-  // Tone instruction
-  const TONE_MAP = {
-    engaging:     "Use an engaging, friendly tone that encourages interaction.",
-    professional: "Use a professional, polished tone suitable for business or brand accounts. Avoid slang or emojis except sparingly.",
-    playful:      "Use a fun, playful, energetic tone with emojis and light humour.",
-    minimal:      "Use a minimal, clean tone. Short sentences. No filler words. Let the design speak.",
-    inspirational:"Use an uplifting, motivational tone. Focus on inspiration and positivity.",
+  // Explicit tone instructions
+  const TONE_INSTRUCTIONS = {
+    engaging:     `Tone: Warm, friendly, conversational. Ask the audience a question. Encourage saving, sharing, or commenting. Use a few relevant emojis.`,
+    professional: `Tone: Professional and polished. Suitable for a business or brand. No slang. Minimal emojis (max 1-2). Focus on value and quality.`,
+    playful:      `Tone: Fun, energetic, and playful! Use exclamation marks, fun emojis 🎉✨😍, and light humour. Make it feel exciting and youthful.`,
+    minimal:      `Tone: Minimal and clean. Very short sentences. No filler words. No excessive emojis — maximum 1. Let the design speak for itself.`,
+    inspirational:`Tone: Uplifting and motivational. Focus on positivity, growth, and inspiration. Use powerful words that resonate emotionally.`,
   };
 
-  const langInstruction = LANG_MAP[lang] || LANG_MAP.english;
-  const toneInstruction = TONE_MAP[tone] || TONE_MAP.engaging;
+  const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.english;
+  const toneInstruction = TONE_INSTRUCTIONS[tone] || TONE_INSTRUCTIONS.engaging;
 
-  // Template fallback (used when no API key, or Claude call fails)
+  // Fallback templates per language
   const makeFallback = () => {
     const base = `${title || "Design"} — ${description || ""}`;
     if (lang === "roman_urdu") return {
-      pinterest: `✨ ${base} — Bohot khubsurat! Save kar lein baad mein! #Design #Creative #Inspiration`,
-      facebook:  `Dekhen yeh beautiful design! ${base} 😍 Aap ka kya khayal hai? Comment mein batayein 👇`,
-      instagram: `${base} ✨ Bohot pyara! #Design #Creative #Pakistani #Art #Aesthetic`,
-      threads:   `${base} — Bohot achha laga! 🌟`,
+      pinterest: `✨ Yeh ${title || "design"} bohot khoobsurat hai! ${description || ""} Save kar lo baad ke liye! #Design #Creative #Inspiration`,
+      facebook:  `Dekho yeh zabardast ${title || "design"}! ${description || ""} Aap ka kya khayal hai? Comment mein batao 👇`,
+      instagram: `${title || "Design"} ✨ ${description || ""} Bohot pyara! #Design #Creative #Pakistani #Art #Aesthetic #Khoobsurat`,
+      threads:   `${title || "Design"} — ${description || ""} Bohot achha laga! 🌟`,
     };
     if (lang === "urdu") return {
-      pinterest: `✨ ${title || "ڈیزائن"} — ${description || ""} بعد میں دیکھنے کے لیے محفوظ کریں! #ڈیزائن #تخلیق`,
-      facebook:  `یہ خوبصورت ڈیزائن دیکھیں! ${base} آپ کا کیا خیال ہے؟ 👇`,
-      instagram: `${title || "ڈیزائن"} ✨ ${description || ""} #ڈیزائن #تخلیق #آرٹ`,
-      threads:   `${base} — بہت خوبصورت! 🌟`,
+      pinterest: `✨ ${title || "ڈیزائن"} — ${description || ""} بعد میں دیکھنے کے لیے محفوظ کریں! #ڈیزائن #تخلیق #آرٹ`,
+      facebook:  `یہ خوبصورت ڈیزائن دیکھیں! ${description || ""} آپ کا کیا خیال ہے؟ کمنٹ میں بتائیں 👇`,
+      instagram: `${title || "ڈیزائن"} ✨ ${description || ""} #ڈیزائن #تخلیق #آرٹ #خوبصورت`,
+      threads:   `${title || "ڈیزائن"} — ${description || ""} بہت خوبصورت! 🌟`,
+    };
+    if (lang === "bilingual") return {
+      pinterest: `✨ یہ ${title || "design"} واقعی amazing ہے! ${description || ""} Save کریں for later! #Design #تخلیق #Creative`,
+      facebook:  `دیکھو یہ beautiful ${title || "design"}! ${description || ""} Aap ka kya khayal ہے؟ Comment کریں 👇`,
+      instagram: `${title || "Design"} ✨ ${description || ""} Bohot khoobsurat ہے! #Design #تخلیق #Creative #Pakistani`,
+      threads:   `${title || "Design"} — بہت ${description || "achha"} ہے! 🌟`,
     };
     return {
       pinterest: `✨ ${base} Save this for later! #Inspiration #Design #Creative`,
@@ -60,34 +73,40 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 1000,
+          max_tokens: 1200,
           messages: [{
             role: "user",
-            content: `Write 4 social media captions for a design/pin.
+            content: `You are a social media caption writer. Write 4 captions for a design/pin.
 
-Title: ${title || "(none)"}
-Description: ${description || "(none)"}
+Design Title: ${title || "(untitled)"}
+Design Description: ${description || "(none)"}
 
-Language: ${langInstruction}
-Tone: ${toneInstruction}
+LANGUAGE RULE (MUST FOLLOW EXACTLY):
+${langInstruction}
 
-Return ONLY valid JSON (no markdown, no explanation) in exactly this format:
+TONE RULE:
+${toneInstruction}
+
+Write one caption for each platform. Each caption must strictly follow both the language rule and tone rule above.
+
+Return ONLY a valid JSON object — no markdown, no explanation, no extra text. Format:
 {
-  "pinterest": "caption for Pinterest — focus on saving/inspiration, 2-3 relevant hashtags, max 500 chars",
-  "facebook": "caption for Facebook — conversational, ask a question, max 400 chars",
-  "instagram": "caption for Instagram — visual feel, 5-8 hashtags, max 300 chars",
-  "threads": "caption for Threads — short, punchy, max 200 chars"
+  "pinterest": "Pinterest caption — emphasise saving/inspiration, add 2-3 hashtags",
+  "facebook": "Facebook caption — conversational, end with a question",
+  "instagram": "Instagram caption — visual and expressive, add 5-8 hashtags",
+  "threads": "Threads caption — very short and punchy, max 2 sentences"
 }`
           }]
         }),
       });
       const data = await response.json();
-      const text = data.content?.[0]?.text || "";
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      const raw = data.content?.[0]?.text || "";
+      // Strip any markdown fences
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
       return res.status(200).json(parsed);
     } catch (err) {
       console.error("Caption generation error:", err);
-      // Fall through to template
     }
   }
 
