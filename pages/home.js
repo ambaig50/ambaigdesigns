@@ -50,8 +50,18 @@ function historyReducer(state, action) {
 
   switch (action.type) {
     case "SET": {
+      // Full history commit — used for discrete actions (add layer, delete, etc.)
       const next = { ...present, ...action.payload };
       return { past: [...past.slice(-MAX_HISTORY), present], present: next, future: [] };
+    }
+    case "SILENT": {
+      // Update present WITHOUT adding to history — used during drag/resize moves
+      const next = { ...present, ...action.payload };
+      return { past, present: next, future };
+    }
+    case "COMMIT": {
+      // Commit current present to history (called on mouseup after drag)
+      return { past: [...past.slice(-MAX_HISTORY), action.snapshot], present, future: [] };
     }
     case "UNDO": {
       if (!past.length) return state;
@@ -71,7 +81,7 @@ function historyReducer(state, action) {
 }
 
 // ── Drag helper ──────────────────────────────────────────────────
-function useDragLayer({ layer, onUpdate, canvasRef, scale }) {
+function useDragLayer({ layer, onUpdate, onCommit, canvasRef, scale }) {
   const startDrag = (e) => {
     e.stopPropagation();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -94,6 +104,7 @@ function useDragLayer({ layer, onUpdate, canvasRef, scale }) {
       });
     };
     const up = () => {
+      onCommit?.();
       window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
       window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
     };
@@ -104,7 +115,7 @@ function useDragLayer({ layer, onUpdate, canvasRef, scale }) {
 }
 
 // ── Rotate helper ────────────────────────────────────────────────
-function useRotate({ layer, onUpdate }) {
+function useRotate({ layer, onUpdate, onCommit }) {
   const startRotate = (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -124,6 +135,7 @@ function useRotate({ layer, onUpdate }) {
       onUpdate({ rotation: rotation % 360 });
     };
     const up = () => {
+      onCommit?.();
       window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up);
       window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up);
     };
@@ -150,9 +162,9 @@ function RotateHandle({ onMouseDown, onTouchStart }) {
 }
 
 // ── Sticker layer ────────────────────────────────────────────────
-function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
-  const startDrag = useDragLayer({ layer, onUpdate, canvasRef, scale });
-  const startRotate = useRotate({ layer, onUpdate });
+function StickerLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
+  const startDrag = useDragLayer({ layer, onUpdate, onCommit, canvasRef, scale });
+  const startRotate = useRotate({ layer, onUpdate, onCommit });
 
   const startResize = (e) => {
     e.stopPropagation();
@@ -205,10 +217,10 @@ function StickerLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect
 }
 
 // ── Text layer ───────────────────────────────────────────────────
-function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
+function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
   const [editing, setEditing] = useState(false);
   const editRef = useRef(null);
-  const startDrag = useDragLayer({ layer, onUpdate, canvasRef, scale });
+  const startDrag = useDragLayer({ layer, onUpdate, onCommit, canvasRef, scale });
 
   const handleDoubleClick = (e) => {
     e.stopPropagation();
@@ -225,7 +237,7 @@ function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, s
 
   const style = TEXT_STYLES[layer.style || "shadow"];
   const fontFamily = FONT_OPTIONS[layer.font || "sans"].family;
-  const startRotate = useRotate({ layer, onUpdate });
+  const startRotate = useRotate({ layer, onUpdate, onCommit });
   const rotation = layer.rotation || 0;
 
   return (
@@ -259,7 +271,7 @@ function TextLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, s
 }
 
 // ── Image layer ──────────────────────────────────────────────────
-function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, scale }) {
+function ImageLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
   const [mode, setMode] = useState("move");
   const toCanvas = (sx, sy) => { const r = canvasRef.current?.getBoundingClientRect(); if (!r) return { x: sx, y: sy }; return { x: (sx - r.left) / scale, y: (sy - r.top) / scale }; };
 
@@ -287,7 +299,7 @@ function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, 
     const d0 = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY) / scale;
     const sw = layer.w, sh = layer.h;
     const move = (ev) => { if (ev.touches.length < 2) return; ev.preventDefault(); const d = Math.hypot(ev.touches[1].clientX - ev.touches[0].clientX, ev.touches[1].clientY - ev.touches[0].clientY) / scale; const ratio = d / d0; onUpdate({ w: Math.max(50, Math.round(sw * ratio)), h: Math.max(50, Math.round(sh * ratio)) }); };
-    const up = () => { window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => { onCommit?.(); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
@@ -296,7 +308,7 @@ function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, 
     const pt = e.touches ? e.touches[0] : e;
     const sx = pt.clientX, sy = pt.clientY, sox = layer.ox ?? 50, soy = layer.oy ?? 50;
     const move = (ev) => { ev.preventDefault(); const p = ev.touches ? ev.touches[0] : ev; onUpdate({ ox: Math.max(0, Math.min(sox - (p.clientX - sx) * 0.3, 100)), oy: Math.max(0, Math.min(soy - (p.clientY - sy) * 0.3, 100)) }); };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => { onCommit?.(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
@@ -306,12 +318,12 @@ function ImageLayer({ layer, onUpdate, onRemove, canvasRef, selected, onSelect, 
     const start = toCanvas(e.touches ? e.touches[0].clientX : e.clientX, e.touches ? e.touches[0].clientY : e.clientY);
     const sw = layer.w, sh = layer.h, cw = canvasRef.current?.offsetWidth || 600, ch = canvasRef.current?.offsetHeight || 900;
     const move = (ev) => { ev.preventDefault(); const p = ev.touches ? ev.touches[0] : ev; const cur = toCanvas(p.clientX, p.clientY); onUpdate({ w: Math.max(50, Math.min(sw + cur.x - start.x, cw - layer.x)), h: Math.max(50, Math.min(sh + cur.y - start.y, ch - layer.y)) }); };
-    const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
+    const up = () => { onCommit?.(); window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); window.removeEventListener("touchmove", move); window.removeEventListener("touchend", up); };
     window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
     window.addEventListener("touchmove", move, { passive: false }); window.addEventListener("touchend", up);
   };
 
-  const startRotate = useRotate({ layer, onUpdate });
+  const startRotate = useRotate({ layer, onUpdate, onCommit });
   const rotation = layer.rotation || 0;
 
   return (
@@ -371,9 +383,11 @@ export default function Home() {
   const { canvasSize, bg, bgOpacity, layers } = present;
   const sz = SIZES[canvasSize];
 
-  const set = (payload) => dispatch({ type: "SET", payload });
-  const undo = () => dispatch({ type: "UNDO" });
-  const redo = () => dispatch({ type: "REDO" });
+  const set    = (payload) => dispatch({ type: "SET", payload });
+  const silent = (payload) => dispatch({ type: "SILENT", payload });
+  const commit = (snapshot) => dispatch({ type: "COMMIT", snapshot });
+  const undo   = () => dispatch({ type: "UNDO" });
+  const redo   = () => dispatch({ type: "REDO" });
 
   // ── UI-only state (not undoable) ──
   const [bgTab, setBgTab]           = useState("photo");
@@ -460,7 +474,12 @@ export default function Home() {
   }, []);
 
   // ── Layer helpers ──
+  // Discrete update — commits to undo history (add, delete, style change, etc.)
   const updateLayer = (id, patch) => set({ layers: layers.map(l => l.id === id ? { ...l, ...patch } : l) });
+  // Silent update — used during drag/resize moves (no history spam)
+  const silentUpdateLayer = (id, patch) => silent({ layers: layers.map(l => l.id === id ? { ...l, ...patch } : l) });
+  // Commit snapshot — called on mouseup after a drag to add one history entry
+  const commitLayer = () => commit(present);
   const removeLayer = (id) => { set({ layers: layers.filter(l => l.id !== id) }); if (activeEl?.id === id) setActiveEl(null); };
   const moveLayerUp = (id) => { const i = layers.findIndex(l => l.id === id); if (i < layers.length - 1) { const arr = [...layers]; [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; set({ layers: arr }); } };
   const moveLayerDown = (id) => { const i = layers.findIndex(l => l.id === id); if (i > 0) { const arr = [...layers]; [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; set({ layers: arr }); } };
@@ -1008,7 +1027,14 @@ export default function Home() {
                       {layer.type === "sticker" && <span style={{ fontSize: (layer.size || 60) * 0.75 }}>{layer.emoji}</span>}
                     </div>
                   );
-                  const commonProps = { key: layer.id, canvasRef, scale: canvasScale, selected: isSelected, onSelect: () => setActiveEl({ type: layer.type, id: layer.id }), onUpdate: (patch) => updateLayer(layer.id, patch), onRemove: () => removeLayer(layer.id) };
+                  const commonProps = {
+                    key: layer.id, canvasRef, scale: canvasScale,
+                    selected: isSelected,
+                    onSelect: () => setActiveEl({ type: layer.type, id: layer.id }),
+                    onUpdate: (patch) => silentUpdateLayer(layer.id, patch),
+                    onCommit: () => commitLayer(),
+                    onRemove: () => removeLayer(layer.id),
+                  };
                   if (layer.type === "image")   return <ImageLayer   {...commonProps} layer={layer} />;
                   if (layer.type === "sticker") return <StickerLayer {...commonProps} layer={layer} />;
                   if (layer.type === "text")    return <TextLayer    {...commonProps} layer={layer} />;
