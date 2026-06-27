@@ -62,7 +62,9 @@ export default function Captions() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
-  const generate = async () => {
+  const generate = async (overrideLang, overrideTone) => {
+    const useLang = overrideLang ?? lang;
+    const useTone = overrideTone ?? tone;
     if (!title && !description) return;
     setLoading(true);
     setCaptions({ pinterest: "", facebook: "", instagram: "", threads: "" });
@@ -70,23 +72,24 @@ export default function Captions() {
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, lang, tone }),
+        body: JSON.stringify({ title, description, lang: useLang, tone: useTone }),
       });
       const data = await res.json();
       setCaptions(data);
       setGenerated(true);
     } catch {
+      const base = `${title || "Design"} — ${description || ""}`;
       setCaptions({
-        pinterest: `✨ ${title || "Design"} — ${description || ""} Save this for later! #Inspiration #Design #Creative`,
+        pinterest: `✨ ${base} Save this for later! #Inspiration #Design #Creative`,
         facebook:  `Check out this ${title || "design"}! ${description || ""} What do you think? 👇`,
         instagram: `${title || "Design"} ✨ ${description || ""} #Design #Creative #Inspiration #Style`,
-        threads:   `${title || "Design"} — ${description || ""}`,
+        threads:   `${base}`,
       });
       setGenerated(true);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (ready && (title || description)) generate(); }, [ready, title, description]);
+  useEffect(() => { if (ready && (title || description)) generate(lang, tone); }, [ready, title, description]);
 
   const copyCaption = async (key) => {
     const text = captions[key];
@@ -185,7 +188,7 @@ export default function Captions() {
                       <span key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, fontSize: (layer.size || 60) * 0.75, lineHeight: 1, display: "inline-block", transform: rot, transformOrigin: "center center" }}>{layer.emoji}</span>
                     );
                     if (layer.type === "text") return (
-                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 8px", whiteSpace: "pre-wrap", maxWidth: "90%", transform: rot, transformOrigin: "center center" }}>{layer.text}</div>
+                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 4px 4px 26px", whiteSpace: "pre-wrap", maxWidth: "90%", transform: rot, transformOrigin: "center center" }}>{layer.text}</div>
                     );
                     return null;
                   })}
@@ -261,7 +264,7 @@ export default function Captions() {
             <p style={{ fontWeight: 600, fontSize: "0.875rem", color: loading ? "var(--text-muted)" : "var(--text)" }}>
               {loading ? "✨ Generating captions…" : generated ? "Captions ready — edit if needed" : "Enter a title in Studio first"}
             </p>
-            <button className="btn btn-ghost" onClick={generate} disabled={loading} style={{ padding: "5px 10px", fontSize: "0.75rem" }}>
+            <button className="btn btn-ghost" onClick={() => generate(lang, tone)} disabled={loading} style={{ padding: "5px 10px", fontSize: "0.75rem" }}>
               {loading ? "…" : "🔄 Regenerate"}
             </button>
           </div>
