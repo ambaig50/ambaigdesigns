@@ -91,6 +91,21 @@ export default function Captions() {
 
   useEffect(() => { if (ready && (title || description)) generate(lang, tone); }, [ready, title, description]);
 
+  // Auto-regenerate when lang or tone changes (only if captions already generated)
+  const handleLangChange = (newLang) => {
+    setLang(newLang);
+    if (generated && !loading && (title || description)) {
+      setTimeout(() => generate(newLang, tone), 50);
+    }
+  };
+
+  const handleToneChange = (newTone) => {
+    setTone(newTone);
+    if (generated && !loading && (title || description)) {
+      setTimeout(() => generate(lang, newTone), 50);
+    }
+  };
+
   const copyCaption = async (key) => {
     const text = captions[key];
     if (!text) return;
@@ -233,12 +248,12 @@ export default function Captions() {
             <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Language</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
               {LANGS.map(({ key, label, flag }) => (
-                <button key={key} onClick={() => setLang(key)} style={{
+                <button key={key} onClick={() => handleLangChange(key)} disabled={loading} style={{
                   padding: "7px 8px", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600, textAlign: "left",
                   border: lang === key ? "1px solid var(--accent)" : "1px solid var(--border)",
                   background: lang === key ? "var(--accent-glow)" : "transparent",
-                  color: lang === key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
+                  color: lang === key ? "var(--accent)" : "var(--text-muted)", cursor: loading ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: 6, opacity: loading && lang !== key ? 0.5 : 1,
                 }}>
                   <span>{flag}</span><span>{label}</span>
                 </button>
@@ -248,13 +263,15 @@ export default function Captions() {
             <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Tone</p>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {TONES.map(({ key, label }) => (
-                <button key={key} onClick={() => setTone(key)} style={{
+                <button key={key} onClick={() => handleToneChange(key)} disabled={loading} style={{
                   padding: "5px 10px", borderRadius: 7, fontSize: "0.72rem", fontWeight: 600,
                   border: tone === key ? "1px solid var(--accent)" : "1px solid var(--border)",
                   background: tone === key ? "var(--accent-glow)" : "transparent",
-                  color: tone === key ? "var(--accent)" : "var(--text-muted)", cursor: "pointer",
+                  color: tone === key ? "var(--accent)" : "var(--text-muted)",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  opacity: loading && tone !== key ? 0.5 : 1,
                 }}>
-                  {label}
+                  {loading && tone === key ? "⏳" : ""} {label}
                 </button>
               ))}
             </div>
@@ -262,7 +279,7 @@ export default function Captions() {
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <p style={{ fontWeight: 600, fontSize: "0.875rem", color: loading ? "var(--text-muted)" : "var(--text)" }}>
-              {loading ? "✨ Generating captions…" : generated ? "Captions ready — edit if needed" : "Enter a title in Studio first"}
+              {loading ? `✨ Generating ${LANGS.find(l=>l.key===lang)?.label || ''} ${tone} captions…` : generated ? `Captions ready (${LANGS.find(l=>l.key===lang)?.label || 'English'}, ${tone}) — tap any tone or language to regenerate` : "Enter a title in Studio first"}
             </p>
             <button className="btn btn-ghost" onClick={() => generate(lang, tone)} disabled={loading} style={{ padding: "5px 10px", fontSize: "0.75rem" }}>
               {loading ? "…" : "🔄 Regenerate"}
