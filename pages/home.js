@@ -450,7 +450,7 @@ export default function Home() {
 
   useEffect(() => {
     try { localStorage.setItem("ambaig_canvas_state", JSON.stringify({ canvasSize, bg, bgOpacity, layers })); } catch (e) {}
-  }, [canvasSize, bg, bgOpacity, layers]);
+  }, [present]); // watch present so SILENT (drag) updates also save
 
   // ── Load pending captions from captions page ──
   useEffect(() => {
@@ -543,7 +543,11 @@ export default function Home() {
     const flushed = flushTextEdits();
     const firstText = flushed.find(l => l.type === "text")?.text || "";
     const secondText = flushed.filter(l => l.type === "text")[1]?.text || "";
-    setTimeout(() => router.push({ pathname: "/captions", query: { title: firstText, description: secondText } }), 50);
+    // Explicitly save latest state before navigating so captions preview is accurate
+    try {
+      localStorage.setItem("ambaig_canvas_state", JSON.stringify({ canvasSize, bg, bgOpacity, layers: flushed }));
+    } catch (e) {}
+    setTimeout(() => router.push({ pathname: "/captions", query: { title: firstText, description: secondText } }), 80);
   };
 
   const goToPost = () => {
