@@ -65,31 +65,96 @@ export default function Captions() {
   const generate = async (overrideLang, overrideTone) => {
     const useLang = overrideLang ?? lang;
     const useTone = overrideTone ?? tone;
-    if (!title && !description) return;
+
+    // If no title/desc from query, try reading from canvas state in localStorage
+    let useTitle = title;
+    let useDesc  = description;
+    if (!useTitle && !useDesc) {
+      try {
+        const state = JSON.parse(localStorage.getItem("ambaig_canvas_state") || "null");
+        const textLayers = state?.layers?.filter(l => l.type === "text") || [];
+        useTitle = textLayers[0]?.text?.trim() || "";
+        useDesc  = textLayers[1]?.text?.trim() || "";
+      } catch (e) {}
+    }
+
+    if (!useTitle && !useDesc) return; // genuinely nothing to generate from
+
     setLoading(true);
     setCaptions({ pinterest: "", facebook: "", instagram: "", threads: "" });
+
+    // Tone prefixes for fallback (used when no API key)
+    const TONE_PREFIX = {
+      engaging:     "✨",
+      professional: "📌",
+      playful:      "🎉",
+      minimal:      "",
+      inspirational:"💫",
+    };
+    const TONE_SUFFIX = {
+      engaging:     " Share with someone who needs to see this!",
+      professional: " Quality design for every occasion.",
+      playful:      " How fun is this?! 😍",
+      minimal:      "",
+      inspirational:" Be inspired every day. 🌟",
+    };
+    const pfx = TONE_PREFIX[useTone] || "✨";
+    const sfx = TONE_SUFFIX[useTone] || "";
+    const base = `${useTitle}${useDesc ? " — " + useDesc : ""}`;
+
+    // Language-aware fallback captions
+    const makeFallback = () => {
+      if (useLang === "roman_urdu") return {
+        pinterest: `${pfx} ${useTitle} — ${useDesc || "Bohot khoobsurat"} Save kar lo! #Design #Creative #Pakistani${sfx}`,
+        facebook:  `Dekho yeh amazing ${useTitle}! ${useDesc || ""} Aap ka kya khayal hai?${sfx} 👇`,
+        instagram: `${useTitle} ✨ ${useDesc || ""} Bohot pyara! #Design #Creative #Pakistani #Art${sfx}`,
+        threads:   `${useTitle} — ${useDesc || "Bohot achha"}!${sfx}`,
+      };
+      if (useLang === "urdu") return {
+        pinterest: `${pfx} ${useTitle} — ${useDesc || "خوبصورت ڈیزائن"} محفوظ کریں! #ڈیزائن #تخلیق${sfx}`,
+        facebook:  `یہ ڈیزائن دیکھیں! ${useTitle} ${useDesc || ""} آپ کا کیا خیال ہے؟${sfx} 👇`,
+        instagram: `${useTitle} ✨ ${useDesc || ""} #ڈیزائن #تخلیق #آرٹ #خوبصورت${sfx}`,
+        threads:   `${useTitle} — ${useDesc || "بہت خوبصورت"}!${sfx}`,
+      };
+      if (useLang === "bilingual") return {
+        pinterest: `${pfx} یہ ${useTitle} واقعی amazing ہے! ${useDesc || ""} Save کریں for later! #Design #تخلیق${sfx}`,
+        facebook:  `دیکھو یہ ${useTitle}! ${useDesc || ""} Aap ka kya khayal ہے؟${sfx} 👇`,
+        instagram: `${useTitle} ✨ ${useDesc || ""} Bohot khoobsurat ہے! #Design #تخلیق #Creative${sfx}`,
+        threads:   `${useTitle} — بہت ${useDesc || "achha"} ہے!${sfx}`,
+      };
+      // English
+      return {
+        pinterest: `${pfx} ${base} Save this for later! #Inspiration #Design #Creative${sfx}`,
+        facebook:  `Check out ${useTitle}! ${useDesc || ""} What do you think?${sfx} 👇`,
+        instagram: `${useTitle} ✨ ${useDesc || ""} #Design #Creative #Inspiration #Style${sfx}`,
+        threads:   `${base}${sfx}`,
+      };
+    };
+
     try {
       const res = await fetch("/api/generateCaptions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, lang: useLang, tone: useTone }),
+        body: JSON.stringify({ title: useTitle, description: useDesc, lang: useLang, tone: useTone }),
       });
       const data = await res.json();
-      setCaptions(data);
+      // If API returned an error object or empty captions, use fallback
+      if (data.error || !data.pinterest) {
+        setCaptions(makeFallback());
+      } else {
+        setCaptions(data);
+      }
       setGenerated(true);
     } catch {
-      const base = `${title || "Design"} — ${description || ""}`;
-      setCaptions({
-        pinterest: `✨ ${base} Save this for later! #Inspiration #Design #Creative`,
-        facebook:  `Check out this ${title || "design"}! ${description || ""} What do you think? 👇`,
-        instagram: `${title || "Design"} ✨ ${description || ""} #Design #Creative #Inspiration #Style`,
-        threads:   `${base}`,
-      });
+      setCaptions(makeFallback());
       setGenerated(true);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { if (ready && (title || description)) generate(lang, tone); }, [ready, title, description]);
+  // Fire on page load — also works when coming directly from nav (no query params)
+  useEffect(() => {
+    if (ready) generate(lang, tone);
+  }, [ready]);
 
   // Auto-regenerate when lang or tone changes (only if captions already generated)
   const handleLangChange = (newLang) => {
