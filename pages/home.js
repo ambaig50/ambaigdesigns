@@ -337,9 +337,12 @@ function ImageLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, 
 
   return (
     <div onMouseDown={startDrag} onTouchStart={(e) => { if (e.touches.length === 2) { onSelect(); startPinch(e); } else startDrag(e); }} data-canvas-el="img"
-      style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, cursor: mode === "crop" ? "crosshair" : "move", outline: selected ? "2px solid #c084fc" : "2px solid transparent", userSelect: "none", touchAction: "none", overflow: "hidden", borderRadius: 4, zIndex: 15, opacity: layer.visible === false ? 0 : 1, transform: `rotate(${rotation}deg)`, transformOrigin: "center center" }}
+      style={{ position: "absolute", left: layer.x, top: layer.y, width: layer.w, height: layer.h, cursor: mode === "crop" ? "crosshair" : "move", outline: selected ? "2px solid #c084fc" : "2px solid transparent", userSelect: "none", touchAction: "none", borderRadius: 4, zIndex: 15, opacity: layer.visible === false ? 0 : 1, transform: `rotate(${rotation}deg)`, transformOrigin: "center center" }}
     >
-      <img src={layer.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
+      {/* Inner wrapper clips the image only — outer div stays unclipped so handles can extend beyond bounds */}
+      <div style={{ width: "100%", height: "100%", overflow: "hidden", borderRadius: 4 }}>
+        <img src={layer.src} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${layer.ox ?? 50}% ${layer.oy ?? 50}%`, display: "block", pointerEvents: "none" }} />
+      </div>
       {selected && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }} style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
