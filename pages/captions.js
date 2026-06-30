@@ -226,7 +226,7 @@ export default function Captions() {
                       <span key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, fontSize: (layer.size || 60) * 0.75, lineHeight: 1, display: "inline-block", transform: rot, transformOrigin: "center center" }}>{layer.emoji}</span>
                     );
                     if (layer.type === "text") return (
-                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 4px 4px 26px", whiteSpace: "pre-wrap", maxWidth: "90%", transform: rot, transformOrigin: "center center" }}>{layer.text}</div>
+                      <div key={layer.id} style={{ position: "absolute", left: layer.x, top: layer.y, display: "inline-block", color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, fontFamily: FONT_OPTIONS[layer.font || "sans"], textAlign: layer.align || "left", textShadow: "0 2px 8px rgba(0,0,0,0.9)", padding: "4px 4px 4px 26px", whiteSpace: "pre-wrap", maxWidth: "90%", transform: rot, transformOrigin: "center center" }}>{layer.text}</div>
                     );
                     return null;
                   })}
