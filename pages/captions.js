@@ -78,58 +78,10 @@ export default function Captions() {
       } catch (e) {}
     }
 
-    if (!useTitle && !useDesc) return; // genuinely nothing to generate from
+    if (!useTitle && !useDesc) return;
 
     setLoading(true);
     setCaptions({ pinterest: "", facebook: "", instagram: "", threads: "" });
-
-    // Tone prefixes for fallback (used when no API key)
-    const TONE_PREFIX = {
-      engaging:     "✨",
-      professional: "📌",
-      playful:      "🎉",
-      minimal:      "",
-      inspirational:"💫",
-    };
-    const TONE_SUFFIX = {
-      engaging:     " Share with someone who needs to see this!",
-      professional: " Quality design for every occasion.",
-      playful:      " How fun is this?! 😍",
-      minimal:      "",
-      inspirational:" Be inspired every day. 🌟",
-    };
-    const pfx = TONE_PREFIX[useTone] || "✨";
-    const sfx = TONE_SUFFIX[useTone] || "";
-    const base = `${useTitle}${useDesc ? " — " + useDesc : ""}`;
-
-    // Language-aware fallback captions
-    const makeFallback = () => {
-      if (useLang === "roman_urdu") return {
-        pinterest: `${pfx} ${useTitle} — ${useDesc || "Bohot khoobsurat"} Save kar lo! #Design #Creative #Pakistani${sfx}`,
-        facebook:  `Dekho yeh amazing ${useTitle}! ${useDesc || ""} Aap ka kya khayal hai?${sfx} 👇`,
-        instagram: `${useTitle} ✨ ${useDesc || ""} Bohot pyara! #Design #Creative #Pakistani #Art${sfx}`,
-        threads:   `${useTitle} — ${useDesc || "Bohot achha"}!${sfx}`,
-      };
-      if (useLang === "urdu") return {
-        pinterest: `${pfx} ${useTitle} — ${useDesc || "خوبصورت ڈیزائن"} محفوظ کریں! #ڈیزائن #تخلیق${sfx}`,
-        facebook:  `یہ ڈیزائن دیکھیں! ${useTitle} ${useDesc || ""} آپ کا کیا خیال ہے؟${sfx} 👇`,
-        instagram: `${useTitle} ✨ ${useDesc || ""} #ڈیزائن #تخلیق #آرٹ #خوبصورت${sfx}`,
-        threads:   `${useTitle} — ${useDesc || "بہت خوبصورت"}!${sfx}`,
-      };
-      if (useLang === "bilingual") return {
-        pinterest: `${pfx} یہ ${useTitle} واقعی amazing ہے! ${useDesc || ""} Save کریں for later! #Design #تخلیق${sfx}`,
-        facebook:  `دیکھو یہ ${useTitle}! ${useDesc || ""} Aap ka kya khayal ہے؟${sfx} 👇`,
-        instagram: `${useTitle} ✨ ${useDesc || ""} Bohot khoobsurat ہے! #Design #تخلیق #Creative${sfx}`,
-        threads:   `${useTitle} — بہت ${useDesc || "achha"} ہے!${sfx}`,
-      };
-      // English
-      return {
-        pinterest: `${pfx} ${base} Save this for later! #Inspiration #Design #Creative${sfx}`,
-        facebook:  `Check out ${useTitle}! ${useDesc || ""} What do you think?${sfx} 👇`,
-        instagram: `${useTitle} ✨ ${useDesc || ""} #Design #Creative #Inspiration #Style${sfx}`,
-        threads:   `${base}${sfx}`,
-      };
-    };
 
     try {
       const res = await fetch("/api/generateCaptions", {
@@ -138,15 +90,21 @@ export default function Captions() {
         body: JSON.stringify({ title: useTitle, description: useDesc, lang: useLang, tone: useTone }),
       });
       const data = await res.json();
-      // If API returned an error object or empty captions, use fallback
-      if (data.error || !data.pinterest) {
-        setCaptions(makeFallback());
-      } else {
+      if (!data.error && data.pinterest) {
         setCaptions(data);
+      } else {
+        throw new Error("Empty response");
       }
       setGenerated(true);
     } catch {
-      setCaptions(makeFallback());
+      // Final client-side fallback (should rarely hit — API has its own fallback)
+      const base = `${useTitle}${useDesc ? " — " + useDesc : ""}`;
+      setCaptions({
+        pinterest: `✨ ${base} Save this for later! #Inspiration #Design #Creative`,
+        facebook:  `Check out ${useTitle}! ${useDesc || ""} What do you think? 👇`,
+        instagram: `${useTitle} ✨ ${useDesc || ""} #Design #Creative #Inspiration #Style`,
+        threads:   `${base}`,
+      });
       setGenerated(true);
     } finally { setLoading(false); }
   };
