@@ -44,6 +44,7 @@ export default function Captions() {
   const [toast, setToast]                 = useState("");
   const [lang, setLang]                   = useState("english");
   const [tone, setTone]                   = useState("engaging");
+  const [canvasFontSize, setCanvasFontSize] = useState(16);
 
   const LANGS = [
     { key: "english",    label: "English",       flag: "🇬🇧" },
@@ -154,11 +155,11 @@ export default function Captions() {
 
     // Save all pending captions that user clicked "Add to Canvas" on
     const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
-    pending.push({ text, color: "#ffffff", fontSize: 16, id: Date.now() });
+    pending.push({ text, color: "#ffffff", fontSize: canvasFontSize, id: Date.now() });
     localStorage.setItem("ambaig_pending_text", JSON.stringify(pending));
 
     setAddedToCanvas(prev => ({ ...prev, [key]: true }));
-    showToast("Caption saved — click 'Back to Studio' to see it on canvas");
+    showToast(`Caption saved at ${canvasFontSize}px — click 'Back to Studio' to see it on canvas`);
   };
 
   const goBackToStudio = () => {
@@ -308,6 +309,26 @@ export default function Captions() {
               {loading ? "…" : "🔄 Regenerate"}
             </button>
           </div>
+
+          {/* Font size for "Add to Canvas" */}
+          <div className="card" style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+              Canvas font size
+            </span>
+            <select
+              value={canvasFontSize}
+              onChange={e => setCanvasFontSize(Number(e.target.value))}
+              style={{ flex: 1 }}
+            >
+              {[12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40].map(s => (
+                <option key={s} value={s}>{s}px</option>
+              ))}
+            </select>
+            <span style={{ fontSize: canvasFontSize, color: "var(--text)", whiteSpace: "nowrap", fontWeight: 600 }}>Aa</span>
+          </div>
+          <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: -8, marginBottom: 4 }}>
+            Applies when you tap "🖼 Add to Canvas" on any caption below. You can also resize it later on canvas.
+          </p>
 
           {PLATFORMS.map(({ key, icon, label, color }) => (
             <div key={key} className="card">
