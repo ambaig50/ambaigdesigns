@@ -246,7 +246,16 @@ function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, o
       onTouchStart={(e) => { if (!editing) { onSelect(); startDrag(e); } }}
       onDoubleClick={handleDoubleClick}
       data-canvas-el="text" data-textbox-id={layer.id}
-      style={{ position: "absolute", left: layer.x, top: layer.y, width: Math.max(80, 600 - layer.x - 16), cursor: editing ? "text" : "move", outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent", borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none", zIndex: 20, opacity: layer.visible === false ? 0 : 1, transform: `rotate(${rotation}deg)`, transformOrigin: "center center" }}
+      style={{
+        position: "absolute", left: layer.x, top: layer.y,
+        display: "inline-block",
+        maxWidth: Math.max(80, 600 - layer.x - 16), // cap width so long text wraps, but shrink to fit short text
+        cursor: editing ? "text" : "move",
+        outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
+        borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none",
+        zIndex: 20, opacity: layer.visible === false ? 0 : 1,
+        transform: `rotate(${rotation}deg)`, transformOrigin: "center center",
+      }}
     >
       {selected && !editing && (
         <>
@@ -264,7 +273,7 @@ function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, o
         }}
         onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
         onTouchStart={(e) => { if (editing) e.stopPropagation(); }}
-        style={{ color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, textAlign: layer.align || "left", padding: "4px 4px 4px 26px", minHeight: 28, outline: "none", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", fontFamily, display: "block", width: "100%", boxSizing: "border-box", ...style }}
+        style={{ color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, textAlign: layer.align || "left", padding: "4px 4px 4px 26px", minHeight: 28, outline: "none", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", fontFamily, display: "inline-block", boxSizing: "border-box", ...style }}
       >{layer.text}</div>
     </div>
   );
@@ -453,6 +462,11 @@ export default function Home() {
   }, [present]); // watch present so SILENT (drag) updates also save
 
   // ── Load pending captions from captions page ──
+  // Uses a ref to avoid stale closure — layers may have just been restored
+  // from localStorage in the previous effect, and this must merge with the LATEST value
+  const layersRef = useRef(layers);
+  useEffect(() => { layersRef.current = layers; }, [layers]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -464,12 +478,13 @@ export default function Home() {
             color: "#ffffff", fontSize: 15, bold: false, align: "left", style: "shadow", font: "sans",
             visible: true, locked: false,
           }));
-          set({ layers: [...layers, ...newLayers] });
+          // Merge with the LIVE current layers (via ref), not the stale closure value
+          set({ layers: [...layersRef.current, ...newLayers] });
           localStorage.removeItem("ambaig_pending_text");
           showToast("✅ Caption placed on canvas — drag to reposition");
         }
       } catch (e) {}
-    }, 250);
+    }, 400); // slightly longer delay to ensure canvas restore has fully completed
     return () => clearTimeout(timer);
   }, []);
 
