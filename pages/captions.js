@@ -148,18 +148,19 @@ export default function Captions() {
     showToast("Caption copied to clipboard!");
   };
 
-  // Save caption to localStorage AND immediately navigate back to Studio
   const addToCanvas = (key) => {
     const text = captions[key];
     if (!text) return;
 
-    // Save all pending captions that user clicked "Add to Canvas" on
-    const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
-    pending.push({ text, color: "#ffffff", fontSize: canvasFontSize, id: Date.now() });
-    localStorage.setItem("ambaig_pending_text", JSON.stringify(pending));
+    const fontSize = Number(canvasFontSize) || 22; // snapshot the value immediately
+
+    // Always start fresh — clear any stale pending from previous sessions
+    localStorage.removeItem("ambaig_pending_text");
+    const fresh = [{ text, color: "#ffffff", fontSize, id: Date.now() }];
+    localStorage.setItem("ambaig_pending_text", JSON.stringify(fresh));
 
     setAddedToCanvas(prev => ({ ...prev, [key]: true }));
-    showToast(`Caption saved at ${canvasFontSize}px — click 'Back to Studio' to see it on canvas`);
+    showToast(`✅ Added at ${fontSize}px — tap "Back to Studio" to place it on canvas`);
   };
 
   const goBackToStudio = () => {
