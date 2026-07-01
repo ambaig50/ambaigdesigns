@@ -478,16 +478,17 @@ export default function Home() {
           const newLayers = pending.map((p, i) => ({
             id: Date.now() + i, type: "text", text: p.text,
             x: 16, y: Math.min(820, 500 + i * 90),
-            color: "#ffffff", fontSize: 15, bold: false, align: "left", style: "shadow", font: "sans",
+            color: p.color || "#ffffff",
+            fontSize: p.fontSize ? Number(p.fontSize) : 22, // explicit Number() cast
+            bold: false, align: "left", style: "shadow", font: "sans",
             visible: true, locked: false,
           }));
-          // Merge with the LIVE current layers (via ref), not the stale closure value
           set({ layers: [...layersRef.current, ...newLayers] });
           localStorage.removeItem("ambaig_pending_text");
-          showToast("✅ Caption placed on canvas — drag to reposition");
+          showToast(`✅ Caption placed at ${newLayers[0]?.fontSize}px — drag to reposition`);
         }
       } catch (e) {}
-    }, 400); // slightly longer delay to ensure canvas restore has fully completed
+    }, 600); // generous delay to ensure RESET dispatch has fully settled
     return () => clearTimeout(timer);
   }, []);
 
