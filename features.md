@@ -1,109 +1,173 @@
 # AmbaigDesigns — Features & Roadmap
 
-_Last updated: June 2026_
+_Last updated: July 2026_
 
-A free, public, client-side Pin/mockup design tool. Anyone can create a design, generate captions, and post it manually to Pinterest, Facebook, Instagram, or Threads — no account, no API keys, no backend required.
+A free, public, client-side Pin and mockup design tool. Anyone can create a design, generate AI captions in multiple languages, and post manually to Pinterest, Facebook, Instagram, or Threads — no account, no sign-up, no backend required.
+
+**Live:** [ambaigdesigns.vercel.app](https://ambaigdesigns.vercel.app)
 
 ---
 
 ## ✅ Current Features
 
-### Design Studio (`/home`)
-- **Canvas sizes**: Portrait (600×900, Pinterest 2:3), Square (600×600, Instagram 1:1), Landscape (800×450, Facebook 16:9)
-- **Background layer** — three types, switchable via tabs:
-  - **Photo**: upload an image, drag to pan/reposition, opacity slider (10–100%)
-  - **Solid color**: color picker + 10 quick swatches
-  - **Gradient**: from/to color pickers, 0–360° angle slider, 6 quick presets
-- **Overlay images**: upload any number of images on top of the background
-  - Drag to move (full canvas-space accuracy, scale-aware for mobile)
-  - Resize via corner handle (desktop) or two-finger pinch (mobile)
-  - Crop/pan mode (✂ toggle) to reposition the image inside its frame
-  - Delete via × button
-- **Text layers**: fully freeform, not tied to any template
-  - Add Title / Add Description / Add Text Box (different default sizes)
-  - Drag to move; double-tap/double-click to edit inline
-  - Per-box controls: color, font size (dropdown 12–72px), alignment (left/center/right), 4 styles (Shadow, Outline, Pill, Plain), bold
-  - Enter key inserts a real line break; text wraps automatically
-  - Single persistent control panel — never disappears when deselecting
-- **Save & Download PNG** — exports the canvas (background + images + text, in correct layer order) as a real PNG file, 2x resolution, downloads directly to device
-- **Clear & New Design** — wipes canvas and local state with confirmation
-- **Auto-save** — entire canvas state persists to `localStorage`, survives navigation and page reloads
-- **Responsive layout** — sticky left-side panel column on desktop, stacked full-width panel on mobile; canvas scales to fit any screen width with pixel-accurate coordinate math
+### 🎨 Design Studio (`/home`)
 
-### AI Captions (`/captions`)
+#### Canvas
+- **Three sizes**: Portrait 600×900 (Pinterest 2:3), Square 600×600 (Instagram 1:1), Landscape 800×450 (Facebook 16:9)
+- Canvas auto-scales to fit any screen width with pixel-accurate coordinate math — drag precision is the same on mobile and desktop
+- Default canvas size can be set in Settings and applies on fresh sessions
+
+#### Background layer (tabbed)
+- **📷 Photo** — upload any image; drag on canvas to pan/reposition; opacity slider (10–100%)
+- **🎨 Solid color** — color picker + 10 named brand-color swatches (Pinterest Red, Facebook Blue, Instagram Purple, Threads Black, etc.)
+- **🌈 Gradient** — from/to color pickers, 0–360° angle slider, 9 named brand presets (Pinterest, Instagram, Facebook, Sunset, Ocean, Midnight, Royal Purple, Peach, Mint)
+
+#### Overlay image layers
+- Upload any number of images on top of the background
+- Drag to move (scale-aware, accurate on mobile)
+- Two-finger pinch to resize on mobile; corner handle on desktop
+- ✂ Crop/pan mode — reposition the photo inside its frame without resizing
+- 🔄 Rotate handle — drag to rotate freely; Shift snaps to 15° increments
+- × button to delete
+
+#### Sticker & emoji layers
+- 8 categories with 8 emoji each: ⭐ Stars, ❤️ Hearts, 🎉 Party, 📌 Markers, 😊 Faces, 🌸 Nature, ◆ Shapes, ➡️ Arrows
+- Tap any emoji to drop it on canvas
+- Drag to move, corner handle to resize, 🔄 to rotate
+- Exports correctly to PNG via Canvas API emoji font stack
+
+#### Text layers
+- Three add buttons: + Add Title (large, bold), + Add Description (small), + Add Text Box (custom)
+- Drag to move; double-tap to edit inline; Enter for line break; text wraps automatically
+- **Text shrinks to fit content** — short text like "WOW" stays tight, long captions wrap to a max width
+- Per-layer controls (always visible in panel):
+  - Color picker
+  - Font size dropdown (12–72px)
+  - Font choice: Sans (DM Sans), Serif (Merriweather), Script (Pacifico), Display (Bebas Neue)
+  - Alignment: left / center / right
+  - Style: Shadow, Outline, Pill, Plain
+  - Bold toggle
+- 🔄 Rotate handle on every text box
+
+#### Layer panel (☰)
+- Lists all layers in stack order (images, stickers, text)
+- Per-layer: 👁 show/hide, 🔒 lock (visible but non-interactive), ↑↓ reorder, 🗑 delete
+- Click any layer name to select it on canvas
+
+#### Undo / Redo
+- 20-step history stack
+- ↩ Undo / ↪ Redo buttons in the panel
+- Keyboard: Ctrl+Z (undo), Ctrl+Y or Ctrl+Shift+Z (redo)
+- Drag/resize/rotate uses silent updates during gesture; commits one history entry on release — no history flooding
+
+#### Export
+- **Save & Download PNG** — 2× retina resolution; draws background + all layers in correct order; custom fonts load via `document.fonts.ready` before drawing; rotation applied per layer via `ctx.rotate()`; emoji rendered with color font stack (`Apple Color Emoji`, `Segoe UI Emoji`, `Noto Color Emoji`)
+- **Save to My Designs** — renders a full thumbnail (photo, gradient, all layers) and saves to gallery
+
+#### Other
+- Auto-save — full canvas state persists to `localStorage` on every change including during drag
+- Clear & New Design — resets canvas with confirmation
+
+---
+
+### 📁 My Designs (`/designs`)
+- Gallery of up to 20 saved designs
+- Thumbnails rendered with full canvas content: photo background, gradient, image layers, stickers, text layers
+- Canvas size badge (Portrait / Square / Landscape) on each card
+- Design name auto-set from first text layer
+- ✏️ Open — restores full design state in Studio
+- 🗑 Delete individual designs (with confirmation step)
+- Clear All
+
+---
+
+### ✨ AI Captions (`/captions`)
+
+#### Generation
 - Generates 4 platform-specific captions (Pinterest, Facebook, Instagram, Threads) from your text layers
-- Uses Claude (Haiku) via `/api/generateCaptions` if `ANTHROPIC_API_KEY` is set in Vercel env vars
-- **Gracefully falls back to template-based captions with zero configuration** if no API key is present — app works out of the box for any deployer
-- Live mini preview of the actual canvas (background + images + text), matched to the correct aspect ratio
-- Each caption is editable, with live character count
-- "🖼 Add to Canvas" places any caption as a draggable text layer back on the design
-- "📋 Copy" with clipboard fallback for browsers that block `navigator.clipboard`
+- Works when navigating from Studio **or** directly from sidebar nav — reads canvas text from `localStorage` if no query params
+- Uses Claude Haiku via `/api/generateCaptions` when `ANTHROPIC_API_KEY` is set in Vercel env
+- **Full fallback matrix (no API key needed)** — 5 tones × 4 languages = 20 pre-written caption sets, each with genuinely distinct sentence structure, vocabulary, length, and energy
 
-### Post Manager (`/post`)
+#### Language options
+- 🇬🇧 **English**
+- 🇵🇰 **اردو** — full Urdu script
+- 🇵🇰 **Roman Urdu** — Urdu words in English letters, as Pakistani social media users type
+- 🌐 **Urdu + English** — bilingual code-switching mix in every caption
+
+#### Tone options
+- **Engaging** — friendly, asks questions, encourages saves/comments
+- **Professional** — polished, no slang, minimal emojis
+- **Playful** — energetic, exclamation marks, fun emojis 🎉✨😍
+- **Minimal** — just the title + 1 hashtag, nothing more
+- **Inspirational** — motivational, emotionally resonant, quote-style
+
+Changing language or tone **auto-regenerates** immediately. Buttons disabled during generation to prevent request queuing.
+
+#### Caption controls
+- Each caption is editable in a textarea
+- 📋 Copy to clipboard (with fallback for browsers blocking `navigator.clipboard`)
+- 🖼 Add to Canvas — adds caption as a draggable text layer; **canvas font size selector** (12–40px) with live "Aa" preview lets you choose the size before adding
+- Mini canvas preview matched to correct aspect ratio, showing actual layers including rotation and fonts
+
+---
+
+### 📤 Post Manager (`/post`)
 - Fully standalone — works whether or not you generated captions first
-- Editable caption box per platform (type your own or use AI-generated ones)
-- **"Open & Post ↗"** per platform: opens the platform in a new tab and copies the caption to clipboard simultaneously (synchronous `window.open` call to avoid mobile popup blockers)
-- Pinterest and Threads use share-intent URLs that pre-fill the caption; Facebook/Instagram open the platform for manual paste (no public unauthenticated share-intent exists for these)
-- Post history log (platform + title + timestamp), stored locally, clearable
+- Editable textarea per platform (pre-filled if you came from Captions, blank otherwise)
+- **Open & Post ↗** — opens platform in a new tab + copies caption to clipboard synchronously (avoids mobile popup blockers)
+- Pinterest and Threads use share-intent URLs that pre-fill captions; Facebook/Instagram open the platform for manual paste
+- Per-post history log (platform + design title + timestamp), clearable
+- If popup is blocked, shows a clear warning toast
 
-### Settings (`/settings`)
-- Live status card: shows whether a design/captions exist and how many posts are logged
-- User preferences: display name, default canvas size (applied on next fresh session)
-- Explanation of how posting works per platform
-- "Clear All Saved Data" — wipes every `localStorage` key the app uses
-- Honest data/privacy note: everything is local-only, no server storage, no account
+---
+
+### ⚙️ Settings (`/settings`)
+- Live status card: saved designs count (of 20), active canvas design, generated captions, post history count
+- Preferences: display name, default canvas size
+- Per-platform posting guide (how each platform works with manual posting)
+- Clear All Saved Data — wipes all 7 localStorage keys
+- Data/privacy note: everything local-only, no server, no account needed
+
+---
 
 ### Architecture
-- Next.js (Pages Router), deployed on Vercel
-- **No database** — all state lives in browser `localStorage`
-- **No required API keys** — `ANTHROPIC_API_KEY` is optional (captions fall back to templates without it)
-- **No OAuth / social API integrations** — posting is manual via `window.open` + clipboard copy
-- Mobile-first responsive design with a fixed bottom tab bar on mobile, sticky sidebar on desktop
+- **Next.js (Pages Router)** deployed on Vercel
+- **No database** — all state in `localStorage`
+- **No required API keys** — `ANTHROPIC_API_KEY` is optional; full fallback caption matrix works without it
+- **No OAuth** — posting is manual via `window.open` + clipboard copy
+- **No templates** — replaced with color/gradient/photo background system
+- Mobile-first: bottom tab bar on mobile, sticky sidebar panel on desktop
+- Per-page `<title>` and meta description tags; SVG favicon in app brand colors; Open Graph tags
 
 ---
 
-## 💡 Suggestions for Next Steps
-
-### Quick wins / cleanup
-- **Remove dead code**: `utils/loadTemplates.js` and `utils/templateComponents.js` are no longer imported anywhere since templates were removed from the canvas — safe to delete
-- **Remove `components/templates/`** folder (50 unused template files) once you're sure you won't reuse any of that artwork
-- Add a **favicon** and proper `<title>`/meta tags per page for SEO and browser tab clarity
-
-### Design Studio enhancements
-- **Stickers/shapes layer** — simple icon or shape overlays (arrows, stars, badges) in addition to photos and text
-- **Multi-select / layer panel** — a list view of all layers (background, each image, each text box) with reorder/lock/visibility toggles, useful once designs get complex
-- **Undo/redo** — currently any mistake requires manual fixing; even a 5-step undo stack would help a lot
-- **Font choices** — currently fixed to DM Sans; adding 2–3 alternate Google Fonts (a serif, a script, a display font) would meaningfully expand creative range
-- **Gradient/color background presets that match brand palettes** (e.g. "Pinterest red," "Instagram gradient") since you specifically target Pinterest/Instagram users
-- **Save multiple designs** — right now only one design lives in `localStorage` at a time; a simple "My Designs" gallery (list of saved canvases, thumbnail + reopen) would let users keep a library instead of overwriting their work each session
-
-### Captions
-- **Language support** — given your interest in Urdu-speaking audiences, an option to generate captions in Urdu or Roman Urdu alongside English would be a natural differentiator
-- **Tone/style presets** — e.g. "Professional," "Playful," "Minimal" — passed into the Claude prompt to vary caption voice
-
-### Posting
-- **Pinterest is the one platform with genuine uplift potential**: their public "Save" button URL scheme already pre-fills description; you could also pre-fill the **image URL** if you host the exported PNG somewhere temporarily (e.g. Vercel Blob), which would let Pinterest auto-attach the image instead of requiring manual upload
-- If you ever want real auto-posting (not just opening + copy), that requires:
-  1. OAuth app registration with each platform (Pinterest Developer, Meta for Developers)
-  2. A way to host the exported image at a public URL (Vercel Blob, S3, Cloudinary)
-  3. Server-side token storage (this is where a real database becomes necessary — Postgres/Neon/Supabase)
-  - This is a meaningfully bigger project phase, not a quick add — worth scoping separately when you're ready
-
-### Data persistence (if you outgrow localStorage)
-- If you want users to keep designs across devices/browsers, or want a "My Designs" gallery that survives a cache clear, you'd need:
-  - **Vercel Postgres or Neon** for storing designs (probably just JSON blobs + image URLs)
-  - **A lightweight auth layer** — even just a magic-link or anonymous device-ID system, not necessarily full accounts
-  - **Image hosting** (Vercel Blob is the simplest fit for a Vercel-deployed app)
-  - This is also the prerequisite for any real analytics (likes/views/saves) from the platforms themselves, since that requires storing OAuth tokens tied to a user
-
-### Monetization (matches your past projects — LinguaApp, URLBoost Pro)
-- Given your Gumroad-listing pattern with LinguaApp, a similar model could work here: a free tier (current feature set) + a one-time-purchase "Pro" tier unlocking extra fonts, stock photo search, or batch design export
-- Alternatively, a small affiliate/Gumroad page offering done-for-you design packs (pre-made backgrounds/templates) targeting your Pakistani/Urdu-speaking audience segment
+## 🚧 Known Limitations (by design, for now)
+- Up to 20 designs saved in browser only — clearing browser data or switching devices loses them
+- No real engagement analytics (likes/views/saves) — requires OAuth + database
+- Facebook/Instagram have no public unauthenticated share-intent URL — must paste manually
+- Sticker emoji rendering in PNG export depends on device OS emoji font — may vary slightly across devices
 
 ---
 
-## Known Limitations (by design, for now)
-- Single design at a time — no gallery/multi-project support yet
-- No real engagement analytics (likes/views/saves) — would require OAuth + database, intentionally deferred
-- Facebook/Instagram require manual paste (no public share-intent URL exists for unauthenticated posting)
-- Templates (the original 50 pre-built layouts) were removed in favor of the color/gradient/photo background system — old template files are still in the repo but unused
+## 💡 Next Steps (if you want to go further)
+
+### Small / Quick
+- **Stock photo search** — integrate Unsplash or Pexels API as a background/overlay image source (free tier available), so users don't need to upload from device
+- **Text formatting per word** — bold/color a single word inside a box (requires switching from `contentEditable` plain text to a rich text model)
+- **Duplicate layer** — copy an existing text/sticker/image layer in one tap
+- **Canvas size badge** in My Designs is purely informational — could be removed if you find it clutters the gallery
+
+### Medium
+- **Image hosting** (Vercel Blob or Cloudinary) — host the exported PNG at a public URL so Pinterest's "Save" button can auto-attach the image, removing the need for manual upload
+- **More sticker packs** — Islamic art, Eid/occasion greetings, Pakistani cultural motifs — would resonate with your target audience
+- **Watermark / branding option** — automatically add "AmbaigDesigns" or a custom logo to exports
+
+### Large (requires backend)
+- **Real auto-posting** — Pinterest API + Meta Graph API + Threads API; needs OAuth app approval, server-side token storage, and image hosting at a public URL
+- **Cross-device sync** — Vercel Postgres or Neon + lightweight anonymous device-ID auth to keep My Designs across browsers and devices
+- **Real analytics** — engagement data (saves, likes, views) per post; requires OAuth tokens stored server-side per user
+
+### Monetization
+- **Free/Pro split** matching your LinguaApp Gumroad pattern: free tier = current feature set; Pro tier = extra font packs, batch PNG export, watermark removal, or custom brand kit
+- **Design pack store** — sell pre-made background/sticker packs on Gumroad targeting Pakistani/Urdu-speaking audiences
