@@ -6,64 +6,64 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Title or description required" });
   }
 
-  const t = title || "Design";
+  const t = title || "";
   const d = description || "";
   const langKey = lang === "urdu" ? "urdu" : lang === "roman_urdu" ? "roman_urdu" : "english";
 
-  // ── Complete fallback matrix: 3 langs × 5 tones ──────────────────
+  // ── Fallback matrix ───────────────────────────────────────────────
+  // Fallback does NOT inject title/description as raw text since they may be
+  // English and would break language purity. Instead uses generic phrases.
   const FALLBACKS = {
     english: {
-      engaging:     { pinterest: `✨ ${t} — ${d} Save this for inspiration! #Inspiration #Design #Creative`, facebook: `Look at this amazing design — ${t}! ${d} What do you think? 👇`, instagram: `${t} ✨ ${d} Tag someone who'd love this! #Design #Creative #Inspiration #Style`, threads: `${t} — ${d} Love it? Save it! 🔥` },
-      professional: { pinterest: `${t}. ${d} Crafted for those who value quality. #Design #Professional #Creative`, facebook: `Introducing ${t}. ${d} Quality design for those who appreciate elegance.`, instagram: `${t} ${d} Elevate your standards. #Design #Professional #Quality #Brand`, threads: `${t}. ${d} Quality speaks for itself.` },
-      playful:      { pinterest: `🎉 ${t} is giving EVERYTHING! ${d} You NEED this! ✨🔥 #Design #Fun #Creative`, facebook: `Have you SEEN ${t}?! 😱 ${d} This is TOO good! 😍`, instagram: `${t} just dropped and WOW! 🤩 ${d} OBSESSED! 🙌✨ #Design #Fun #Creative #Vibes`, threads: `${t} > everything else 😂🔥 No notes!!` },
+      engaging:     { pinterest: `✨ ${t} — ${d} Save this for inspiration! #Inspiration #Design #Creative`, facebook: `Look at this! ${t} — ${d} What do you think? 👇`, instagram: `${t} ✨ ${d} Tag someone who'd love this! #Design #Creative #Inspiration`, threads: `${t} — ${d} Love it? Save it! 🔥` },
+      professional: { pinterest: `${t}. ${d} Quality design for those who value elegance. #Design #Professional`, facebook: `${t}. ${d} Crafted with attention to detail and quality.`, instagram: `${t} ${d} Elevate your standards. #Design #Professional #Quality`, threads: `${t}. ${d} Quality speaks for itself.` },
+      playful:      { pinterest: `🎉 ${t} is giving EVERYTHING! ${d} Save NOW! ✨🔥 #Design #Fun`, facebook: `Have you SEEN ${t}?! 😱 ${d} TOO good! 😍`, instagram: `${t} just dropped! 🤩 ${d} OBSESSED! 🙌✨ #Design #Fun #Vibes`, threads: `${t} > everything 😂🔥 No notes!!` },
       minimal:      { pinterest: `${t}. ${d} #Design`, facebook: `${t}. ${d}`, instagram: `${t}. ${d} #Design #Art #Creative`, threads: `${t}.` },
-      inspirational:{ pinterest: `💫 ${t} — ${d} Let this inspire your next step. #Inspiration #Motivation #Design`, facebook: `✨ ${t} — ${d} Some designs make you feel something. This is one of them. 💜`, instagram: `${t} 💫 ${d} Believe in what you create. #Inspiration #Motivation #Design #Creative`, threads: `${t}. ${d} Keep going. 💫` },
+      inspirational:{ pinterest: `💫 ${t} — ${d} Let this inspire your next step. #Inspiration #Design`, facebook: `✨ ${t} — ${d} Some things make you feel something. 💜`, instagram: `${t} 💫 ${d} Believe in what you create. #Inspiration #Design`, threads: `${t}. ${d} Keep going. 💫` },
     },
     urdu: {
-      engaging:     { pinterest: `✨ ${t} — ${d} اسے محفوظ کریں اور دوستوں کے ساتھ شیئر کریں! #ڈیزائن #تخلیق #آرٹ`, facebook: `یہ خوبصورت ڈیزائن دیکھیں! ${t} — ${d} آپ کا کیا خیال ہے؟ کمنٹ میں بتائیں 👇`, instagram: `${t} ✨ ${d} پسند آیا؟ کسی دوست کو ٹیگ کریں! #ڈیزائن #تخلیق #آرٹ #پاکستان`, threads: `${t} — ${d} کمال ہے! محفوظ کریں 🔥` },
-      professional: { pinterest: `${t}۔ ${d} اعلیٰ معیار کا ڈیزائن بہترین پسند کرنے والوں کے لیے۔ #ڈیزائن #پیشہ`, facebook: `${t} پیش کر رہے ہیں۔ ${d} معیار اور خوبصورتی کی قدر کرنے والوں کے لیے۔`, instagram: `${t} ${d} اپنا معیار بلند کریں۔ #ڈیزائن #پیشہ #معیار #برانڈ`, threads: `${t}۔ ${d} معیار خود بولتا ہے۔` },
-      playful:      { pinterest: `🎉 واہ ${t} نے تو کمال کر دیا! ${d} ابھی محفوظ کریں! ✨🔥 #ڈیزائن #تخلیق`, facebook: `یار — کیا دیکھا ${t}؟! 😱 ${d} بہت اچھا ہے! لائیک کریں! 😍`, instagram: `${t} آ گیا اور واہ! 🤩 ${d} ہم دیوانے ہو گئے! #ڈیزائن #کمال #تخلیق`, threads: `${t} سب سے بہترین! 😂🔥 لاجواب!!` },
-      minimal:      { pinterest: `${t}۔ ${d} #ڈیزائن`, facebook: `${t}۔ ${d}`, instagram: `${t}۔ ${d} #ڈیزائن #آرٹ #تخلیق`, threads: `${t}۔` },
-      inspirational:{ pinterest: `💫 ${t} — ${d} ہر بڑا سفر ایک چھوٹے قدم سے شروع ہوتا ہے۔ #تحریک #ڈیزائن #الہام`, facebook: `✨ ${t} — ${d} کچھ ڈیزائن صرف خوبصورت نہیں، وہ احساس جگاتے ہیں۔ 💜`, instagram: `${t} 💫 ${d} جو بناتے ہو اس پر یقین رکھو۔ #تحریک #ڈیزائن #الہام #پاکستان`, threads: `${t}۔ ${d} آگے بڑھتے رہو۔ 💫` },
+      engaging:     { pinterest: `✨ خوبصورت ڈیزائن — ابھی محفوظ کریں اور دوستوں کے ساتھ شیئر کریں! #ڈیزائن #تخلیق #آرٹ`, facebook: `یہ خوبصورت ڈیزائن دیکھیں! آپ کا کیا خیال ہے؟ کمنٹ میں بتائیں 👇`, instagram: `خوبصورت ڈیزائن ✨ پسند آیا؟ کسی دوست کو ٹیگ کریں! #ڈیزائن #تخلیق #آرٹ #پاکستان`, threads: `شاندار ڈیزائن — کمال ہے! محفوظ کریں 🔥` },
+      professional: { pinterest: `اعلیٰ معیار کا ڈیزائن — بہترین پسند کرنے والوں کے لیے۔ #ڈیزائن #پیشہ`, facebook: `شاندار ڈیزائن پیش ہے۔ معیار اور خوبصورتی کی قدر کرنے والوں کے لیے۔`, instagram: `خوبصورت ڈیزائن — اپنا معیار بلند کریں۔ #ڈیزائن #پیشہ #معیار #برانڈ`, threads: `معیاری ڈیزائن۔ معیار خود بولتا ہے۔` },
+      playful:      { pinterest: `🎉 واہ! کیا شاندار ڈیزائن ہے! ابھی محفوظ کریں ورنہ پچھتائیں گے! ✨🔥 #ڈیزائن #تخلیق`, facebook: `یار — کیا ڈیزائن ہے یہ؟! 😱 بہت زیادہ اچھا ہے! لائیک کریں! 😍`, instagram: `واہ! کیا خوبصورت ڈیزائن! 🤩 ہم تو دیوانے ہو گئے! #ڈیزائن #کمال #تخلیق`, threads: `سب سے بہترین ڈیزائن! 😂🔥 لاجواب!!` },
+      minimal:      { pinterest: `خوبصورت ڈیزائن۔ #ڈیزائن`, facebook: `خوبصورت ڈیزائن۔`, instagram: `خوبصورت ڈیزائن۔ #ڈیزائن #آرٹ #تخلیق`, threads: `خوبصورت ڈیزائن۔` },
+      inspirational:{ pinterest: `💫 ہر بڑا سفر ایک چھوٹے قدم سے شروع ہوتا ہے۔ یہ ڈیزائن آپ کو متاثر کرے۔ #تحریک #ڈیزائن #الہام`, facebook: `✨ کچھ ڈیزائن صرف خوبصورت نہیں ہوتے — وہ دل میں اتر جاتے ہیں۔ 💜`, instagram: `💫 جو بناتے ہو اس پر یقین رکھو۔ ہمیشہ متاثر رہو۔ #تحریک #ڈیزائن #الہام #پاکستان`, threads: `آگے بڑھتے رہو۔ آپ اچھا کر رہے ہیں۔ 💫` },
     },
     roman_urdu: {
-      engaging:     { pinterest: `✨ ${t} — ${d} Ise save karo aur doston ke saath share karo! #Design #Creative #Pakistani`, facebook: `Yeh khubsurat design dekho! ${t} — ${d} Aap ka kya khayal hai? Comment mein batao 👇`, instagram: `${t} ✨ ${d} Pasand aaya? Kisi dost ko tag karo! #Design #Creative #Pakistani #Art`, threads: `${t} — ${d} Kamal hai! Save karo 🔥` },
-      professional: { pinterest: `${t}. ${d} Aala darje ka design behtareen pasand karne walon ke liye. #Design #Professional`, facebook: `${t} pesh kar rahe hain. ${d} Mayaar aur khubsurti ki qadar karne walon ke liye.`, instagram: `${t} ${d} Apna mayaar buland karo. #Design #Professional #Quality #Pakistani`, threads: `${t}. ${d} Mayaar khud bolta hai.` },
-      playful:      { pinterest: `🎉 Yaar ${t} ne kamal kar diya! ${d} Abhi save karo! ✨🔥 #Design #Mast #Creative`, facebook: `Yaar — kya dekha ${t}?! 😱 ${d} Bohot acha hai! Like karo! 😍`, instagram: `${t} aa gaya aur wow! 🤩 ${d} Hum pagal ho gaye! #Design #Kamaal #Creative #Pakistani`, threads: `${t} sab se behtareen! 😂🔥 Lajawaab!!` },
-      minimal:      { pinterest: `${t}. ${d} #Design`, facebook: `${t}. ${d}`, instagram: `${t}. ${d} #Design #Art #Pakistani`, threads: `${t}.` },
-      inspirational:{ pinterest: `💫 ${t} — ${d} Har badi safar ek chhote qadam se shuru hoti hai. #Inspiration #Design`, facebook: `✨ ${t} — ${d} Kuch designs sirf sundar nahi hote, woh feel karate hain. 💜`, instagram: `${t} 💫 ${d} Jo banate ho usme yaqeen rakho. #Inspiration #Design #Pakistani`, threads: `${t}. ${d} Aage badhte raho. 💫` },
+      engaging:     { pinterest: `✨ Khoobsurat design — Abhi save karo aur doston ke saath share karo! #Design #Creative #Pakistani`, facebook: `Yeh khoobsurat design dekho! Aap ka kya khayal hai? Comment mein batao 👇`, instagram: `Khoobsurat design ✨ Pasand aaya? Kisi dost ko tag karo! #Design #Creative #Pakistani #Art`, threads: `Shandar design — Kamal hai! Save karo 🔥` },
+      professional: { pinterest: `Aala darje ka design — Behtareen pasand karne walon ke liye. #Design #Professional`, facebook: `Shandar design pesh hai. Mayaar aur khubsurti ki qadar karne walon ke liye.`, instagram: `Khoobsurat design — Apna mayaar buland karo. #Design #Professional #Quality #Pakistani`, threads: `Mayaari design. Mayaar khud bolta hai.` },
+      playful:      { pinterest: `🎉 Yaar! Kya shandar design hai! Abhi save karo varna pachtaoge! ✨🔥 #Design #Mast`, facebook: `Yaar — kya design hai yeh?! 😱 Bohot zyada acha hai! Like karo! 😍`, instagram: `Wow! Kya khoobsurat design! 🤩 Hum toh pagal ho gaye! #Design #Kamaal #Creative #Pakistani`, threads: `Sab se behtareen design! 😂🔥 Lajawaab!!` },
+      minimal:      { pinterest: `Khoobsurat design. #Design`, facebook: `Khoobsurat design.`, instagram: `Khoobsurat design. #Design #Art #Pakistani`, threads: `Khoobsurat design.` },
+      inspirational:{ pinterest: `💫 Har badi safar ek chhote qadam se shuru hoti hai. Yeh design tumhe inspire kare. #Inspiration #Design`, facebook: `✨ Kuch designs sirf sundar nahi hote — woh dil mein utar jate hain. 💜`, instagram: `💫 Jo banate ho usme yaqeen rakho. Hamesha inspired raho. #Inspiration #Design #Pakistani`, threads: `Aage badhte raho. Tum acha kar rahe ho. 💫` },
     },
   };
 
   const getFallback = () => {
     const toneData = FALLBACKS[langKey];
-    return toneData[tone] || toneData.engaging;
+    return (toneData[tone] || toneData.engaging);
   };
 
   // ── Claude API ───────────────────────────────────────────────────
   if (process.env.ANTHROPIC_API_KEY) {
 
-    // System prompts enforce language at the model instruction level
     const SYSTEM_PROMPTS = {
-      english: `You are a social media caption writer. You write ONLY in English. Never use Urdu script or Roman Urdu words.`,
-      urdu: `آپ ایک سوشل میڈیا کیپشن لکھنے والے ہیں۔ آپ صرف اور صرف اردو میں لکھتے ہیں۔ کبھی انگریزی الفاظ استعمال نہ کریں سوائے ہیش ٹیگ کے۔ ہر لفظ خالص اردو رسم الخط میں ہونا چاہیے۔`,
-      roman_urdu: `You are a social media caption writer. You write ONLY in Roman Urdu — Urdu words spelled with English letters. Examples: "Yeh bohot khoobsurat hai", "Save karo yaar", "Kamal kar diya". Never use Urdu script. Never write standard English sentences. Only Roman Urdu.`,
+      english: `You are a social media caption writer. You write ONLY in English. Never use Urdu script or Roman Urdu words under any circumstances.`,
+      urdu: `آپ ایک سوشل میڈیا کیپشن لکھنے والے ہیں۔ آپ صرف اور صرف اردو رسم الخط میں لکھتے ہیں۔ آپ کو جو بھی عنوان یا تفصیل ملے، چاہے وہ انگریزی میں ہو، آپ اسے اردو میں ترجمہ کر کے کیپشن لکھیں۔ کبھی بھی انگریزی الفاظ استعمال نہ کریں سوائے ہیش ٹیگ کے۔`,
+      roman_urdu: `You are a social media caption writer. You write ONLY in Roman Urdu — Urdu language written with English letters. Whatever title or description you receive, even if it is in English, you must translate it to Urdu meaning and write the caption in Roman Urdu words. Never write standard English sentences. Never use Urdu script. Only Roman Urdu like: "Subah bakhair", "Bohot acha", "Khoobsurat", "Pyara design", "Save karo yaar".`,
     };
 
     const TONE_PROMPTS = {
       engaging:     `Friendly and warm. Ask a question. Encourage saving or commenting. Use a few emojis.`,
       professional: `Professional and polished. No slang. Minimal emojis (max 1). Focus on quality and value.`,
-      playful:      `Fun, excited, energetic! Use playful words, exclamation marks, fun emojis.`,
-      minimal:      `Extremely short and minimal. No filler words. Maximum 1 emoji. Less is more.`,
-      inspirational:`Uplifting and motivational. Emotional words. Focus on belief, growth, and inspiration.`,
+      playful:      `Fun, excited, energetic! Playful words, exclamation marks, fun emojis.`,
+      minimal:      `Extremely short and minimal. No filler words. Maximum 1 emoji.`,
+      inspirational:`Uplifting and motivational. Emotional words. Focus on belief and growth.`,
     };
 
-    // Examples of what each caption should look like
-    const EXAMPLES = {
-      english: `{"pinterest":"✨ Beautiful Design — Save this for inspiration! #Design #Creative","facebook":"Look at this design! What do you think? 👇","instagram":"Beautiful Design ✨ Amazing work! #Design #Creative #Art","threads":"Beautiful Design — Amazing! 🔥"}`,
-      urdu: `{"pinterest":"✨ خوبصورت ڈیزائن — اسے محفوظ کریں! #ڈیزائن #تخلیق","facebook":"یہ ڈیزائن دیکھیں! آپ کا کیا خیال ہے؟ 👇","instagram":"خوبصورت ڈیزائن ✨ شاندار کام! #ڈیزائن #تخلیق #آرٹ","threads":"خوبصورت ڈیزائن — لاجواب! 🔥"}`,
-      roman_urdu: `{"pinterest":"✨ Khoobsurat Design — Ise save karo! #Design #Creative","facebook":"Yeh design dekho! Aap ka kya khayal hai? 👇","instagram":"Khoobsurat Design ✨ Kamal kaam! #Design #Creative #Art","threads":"Khoobsurat Design — Lajawaab! 🔥"}`,
-    };
+    const TRANSLATION_NOTE = langKey === "english"
+      ? ""
+      : langKey === "urdu"
+        ? `\nنوٹ: اگر عنوان یا تفصیل انگریزی میں ہو تو اسے اردو میں ترجمہ کریں اور پھر کیپشن لکھیں۔`
+        : `\nNote: If the title or description is in English, translate it to Urdu meaning first, then write the caption in Roman Urdu words.`;
 
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -79,15 +79,12 @@ export default async function handler(req, res) {
           system: SYSTEM_PROMPTS[langKey],
           messages: [{
             role: "user",
-            content: `Write 4 social media captions for this design:
+            content: `Write 4 social media captions for this design.
 Title: ${t}
 Description: ${d || "none"}
-Tone: ${TONE_PROMPTS[tone] || TONE_PROMPTS.engaging}
+Tone: ${TONE_PROMPTS[tone] || TONE_PROMPTS.engaging}${TRANSLATION_NOTE}
 
-Here is an example of the EXACT format and language style required:
-${EXAMPLES[langKey]}
-
-Now write captions for the title and description above in the same language style. Return ONLY valid JSON:
+Return ONLY valid JSON with no markdown:
 {"pinterest":"...","facebook":"...","instagram":"...","threads":"..."}`
           }]
         }),
