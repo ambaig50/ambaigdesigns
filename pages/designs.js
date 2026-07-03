@@ -95,10 +95,6 @@ export default function MyDesigns() {
                   ) : (
                     <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem" }}>🎨</div>
                   )}
-                  {/* Canvas size badge */}
-                  <span style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.6)", color: "white", fontSize: "0.6rem", fontWeight: 700, padding: "2px 6px", borderRadius: 10, textTransform: "capitalize" }}>
-                    {design.state?.canvasSize || "portrait"}
-                  </span>
                 </div>
 
                 {/* Info */}
