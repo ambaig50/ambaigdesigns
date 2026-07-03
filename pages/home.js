@@ -162,7 +162,7 @@ function RotateHandle({ onMouseDown, onTouchStart }) {
 }
 
 // ── Sticker layer ────────────────────────────────────────────────
-function StickerLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
+function StickerLayer({ layer, onUpdate, onCommit, onRemove, onDuplicate, canvasRef, selected, onSelect, scale }) {
   const startDrag = useDragLayer({ layer, onUpdate, onCommit, canvasRef, scale });
   const startRotate = useRotate({ layer, onUpdate, onCommit });
 
@@ -207,6 +207,8 @@ function StickerLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
             style={{ position: "absolute", top: -10, left: -10, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>×</button>
+          <button onMouseDown={(e) => { e.stopPropagation(); onDuplicate(); }}
+            title="Duplicate" style={{ position: "absolute", top: -10, right: -10, width: 20, height: 20, borderRadius: "50%", background: "#a78bfa", border: "2px solid white", color: "white", fontSize: 10, cursor: "pointer", zIndex: 30, fontWeight: 700 }}>⧉</button>
           <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
           <div onMouseDown={startResize} onTouchStart={startResize}
             style={{ position: "absolute", bottom: -6, right: -6, width: 16, height: 16, background: "#c084fc", borderRadius: 3, cursor: "nwse-resize", zIndex: 30, border: "2px solid white" }} />
@@ -217,8 +219,9 @@ function StickerLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected
 }
 
 // ── Text layer ───────────────────────────────────────────────────
-function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
+function TextLayer({ layer, onUpdate, onCommit, onRemove, onDuplicate, canvasRef, selected, onSelect, scale }) {
   const [editing, setEditing] = useState(false);
+  const [toolbar, setToolbar] = useState(null); // { top, left } or null
   const editRef = useRef(null);
   const startDrag = useDragLayer({ layer, onUpdate, onCommit, canvasRef, scale });
 
@@ -232,13 +235,53 @@ function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, o
     }, 50);
   };
 
-  const handleBlur = (e) => { setEditing(false); onUpdate({ text: e.target.innerText || layer.text }); };
-  useEffect(() => { if (!selected) setEditing(false); }, [selected]);
+  // Show/hide formatting toolbar based on text selection
+  const handleSelect = () => {
+    if (!editing) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { setToolbar(null); return; }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    if (!canvasRect) return;
+    const s = scale || 1;
+    setToolbar({
+      left: Math.max(0, (rect.left - canvasRect.left) / s),
+      top: Math.max(0, (rect.top - canvasRect.top) / s - 44),
+    });
+  };
+
+  const applyFormat = (command, value) => {
+    editRef.current?.focus();
+    document.execCommand(command, false, value || null);
+    // Save innerHTML after formatting
+    setTimeout(() => {
+      if (editRef.current) onUpdate({ html: editRef.current.innerHTML, text: editRef.current.innerText });
+    }, 10);
+  };
+
+  const handleBlur = (e) => {
+    // Delay so toolbar button clicks register before blur hides them
+    setTimeout(() => {
+      setEditing(false);
+      setToolbar(null);
+      if (editRef.current) onUpdate({ html: editRef.current.innerHTML, text: editRef.current.innerText });
+    }, 150);
+  };
+
+  useEffect(() => { if (!selected) { setEditing(false); setToolbar(null); } }, [selected]);
 
   const style = TEXT_STYLES[layer.style || "shadow"];
   const fontFamily = FONT_OPTIONS[layer.font || "sans"].family;
   const startRotate = useRotate({ layer, onUpdate, onCommit });
   const rotation = layer.rotation || 0;
+
+  // Sync innerHTML when layer.html changes externally (e.g. on mount from saved state)
+  useEffect(() => {
+    if (!editing && editRef.current && layer.html && editRef.current.innerHTML !== layer.html) {
+      editRef.current.innerHTML = layer.html;
+    }
+  }, [layer.html, editing]);
 
   return (
     <div
@@ -249,7 +292,7 @@ function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, o
       style={{
         position: "absolute", left: layer.x, top: layer.y,
         display: "inline-block",
-        maxWidth: Math.max(80, 600 - layer.x - 16), // cap width so long text wraps, but shrink to fit short text
+        maxWidth: Math.max(80, 600 - layer.x - 16),
         cursor: editing ? "text" : "move",
         outline: selected ? (editing ? "2px solid #f472b6" : "2px dashed #c084fc") : "2px dashed transparent",
         borderRadius: 4, userSelect: editing ? "text" : "none", touchAction: editing ? "auto" : "none",
@@ -257,30 +300,67 @@ function TextLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, o
         transform: `rotate(${rotation}deg)`, transformOrigin: "center center",
       }}
     >
+      {/* Floating format toolbar — appears when text is selected */}
+      {editing && toolbar && (
+        <div onMouseDown={(e) => e.preventDefault()} style={{
+          position: "absolute", left: toolbar.left, top: toolbar.top,
+          display: "flex", gap: 3, alignItems: "center",
+          background: "#1a1a24", border: "1px solid var(--accent)", borderRadius: 8,
+          padding: "4px 6px", zIndex: 50, boxShadow: "0 4px 16px rgba(0,0,0,0.7)",
+          whiteSpace: "nowrap",
+        }}>
+          <button onMouseDown={() => applyFormat("bold")} title="Bold"
+            style={{ background: "none", border: "none", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", padding: "2px 5px", borderRadius: 4 }}>B</button>
+          <button onMouseDown={() => applyFormat("italic")} title="Italic"
+            style={{ background: "none", border: "none", color: "white", fontStyle: "italic", fontSize: 13, cursor: "pointer", padding: "2px 5px", borderRadius: 4 }}>I</button>
+          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.2)" }} />
+          {["#ffffff","#f87171","#fb923c","#facc15","#4ade80","#60a5fa","#c084fc","#f472b6","#000000"].map(c => (
+            <button key={c} onMouseDown={() => applyFormat("foreColor", c)} title={c}
+              style={{ width: 16, height: 16, borderRadius: "50%", background: c, border: "2px solid rgba(255,255,255,0.3)", cursor: "pointer", padding: 0, flexShrink: 0 }} />
+          ))}
+          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.2)" }} />
+          <button onMouseDown={() => applyFormat("removeFormat")} title="Clear formatting"
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", fontSize: 11, cursor: "pointer", padding: "2px 4px" }}>✕</button>
+        </div>
+      )}
+
       {selected && !editing && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }}
             style={{ position: "absolute", top: 2, left: 2, width: 20, height: 20, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 30, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <button onMouseDown={(e) => { e.stopPropagation(); onDuplicate(); }}
+            title="Duplicate" style={{ position: "absolute", top: 2, right: 2, width: 20, height: 20, borderRadius: "50%", background: "#a78bfa", border: "2px solid white", color: "white", fontSize: 10, cursor: "pointer", zIndex: 30, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>⧉</button>
           <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
-          <div style={{ position: "absolute", bottom: -14, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>double-tap to edit</div>
+          <div style={{ position: "absolute", bottom: -14, left: 0, fontSize: 9, color: "#c084fc", whiteSpace: "nowrap", pointerEvents: "none" }}>double-tap to edit · select text to style</div>
         </>
       )}
       <div ref={editRef} data-text-content contentEditable={editing} suppressContentEditableWarning
         onBlur={handleBlur}
+        onSelect={handleSelect}
+        onKeyUp={handleSelect}
+        onMouseUp={handleSelect}
         onKeyDown={(e) => {
           if (editing) e.stopPropagation();
-          if (e.key === "Enter") { e.preventDefault(); const sel = window.getSelection(); if (sel?.rangeCount) { const r = sel.getRangeAt(0); r.deleteContents(); const br = document.createTextNode("\n"); r.insertNode(br); r.setStartAfter(br); r.setEndAfter(br); sel.removeAllRanges(); sel.addRange(r); } }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            document.execCommand("insertLineBreak", false, null);
+          }
+          // Hide toolbar on Escape
+          if (e.key === "Escape") setToolbar(null);
         }}
         onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
         onTouchStart={(e) => { if (editing) e.stopPropagation(); }}
         style={{ color: layer.color || "#fff", fontSize: layer.fontSize || 18, fontWeight: layer.bold ? 700 : 400, textAlign: layer.align || "left", padding: "4px 4px 4px 26px", minHeight: 28, outline: "none", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", overflowWrap: "break-word", fontFamily, display: "inline-block", boxSizing: "border-box", ...style }}
-      >{layer.text}</div>
+        dangerouslySetInnerHTML={!editing && layer.html ? { __html: layer.html } : undefined}
+      >
+        {(!layer.html || editing) ? layer.text : undefined}
+      </div>
     </div>
   );
 }
 
 // ── Image layer ──────────────────────────────────────────────────
-function ImageLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, onSelect, scale }) {
+function ImageLayer({ layer, onUpdate, onCommit, onRemove, onDuplicate, canvasRef, selected, onSelect, scale }) {
   const [mode, setMode] = useState("move");
   const toCanvas = (sx, sy) => { const r = canvasRef.current?.getBoundingClientRect(); if (!r) return { x: sx, y: sy }; return { x: (sx - r.left) / scale, y: (sy - r.top) / scale }; };
 
@@ -346,6 +426,7 @@ function ImageLayer({ layer, onUpdate, onCommit, onRemove, canvasRef, selected, 
       {selected && (
         <>
           <button onMouseDown={(e) => { e.stopPropagation(); onRemove(); }} style={{ position: "absolute", top: 4, left: 4, width: 26, height: 26, borderRadius: "50%", background: "#f87171", border: "2px solid white", color: "white", fontSize: 14, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+          <button onMouseDown={(e) => { e.stopPropagation(); onDuplicate(); }} title="Duplicate" style={{ position: "absolute", top: 4, left: 34, width: 26, height: 26, borderRadius: "50%", background: "#a78bfa", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>⧉</button>
           <button onMouseDown={(e) => { e.stopPropagation(); setMode(m => m === "move" ? "crop" : "move"); }} style={{ position: "absolute", top: 4, right: 4, width: 26, height: 26, borderRadius: "50%", background: mode === "crop" ? "#f472b6" : "#c084fc", border: "2px solid white", color: "white", fontSize: 11, cursor: "pointer", zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center" }}>{mode === "move" ? "✂" : "↔"}</button>
           <RotateHandle onMouseDown={startRotate} onTouchStart={startRotate} />
           <div onMouseDown={startResize} onTouchStart={startResize} style={{ position: "absolute", bottom: 4, right: 4, width: 22, height: 22, background: "#c084fc", borderRadius: 4, cursor: "nwse-resize", zIndex: 25, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontSize: 10, color: "white", pointerEvents: "none" }}>⤡</span></div>
@@ -500,6 +581,17 @@ export default function Home() {
   // Commit snapshot — called on mouseup after a drag to add one history entry
   const commitLayer = () => commit(present);
   const removeLayer = (id) => { set({ layers: layers.filter(l => l.id !== id) }); if (activeEl?.id === id) setActiveEl(null); };
+  const duplicateLayer = (id) => {
+    const original = layers.find(l => l.id === id);
+    if (!original) return;
+    const newId = Date.now();
+    const dupe = { ...original, id: newId, x: (original.x || 0) + 20, y: (original.y || 0) + 20 };
+    const idx = layers.findIndex(l => l.id === id);
+    const newLayers = [...layers];
+    newLayers.splice(idx + 1, 0, dupe);
+    set({ layers: newLayers });
+    setActiveEl({ type: dupe.type, id: newId });
+  };
   const moveLayerUp = (id) => { const i = layers.findIndex(l => l.id === id); if (i < layers.length - 1) { const arr = [...layers]; [arr[i], arr[i+1]] = [arr[i+1], arr[i]]; set({ layers: arr }); } };
   const moveLayerDown = (id) => { const i = layers.findIndex(l => l.id === id); if (i > 0) { const arr = [...layers]; [arr[i], arr[i-1]] = [arr[i-1], arr[i]]; set({ layers: arr }); } };
 
@@ -549,8 +641,12 @@ export default function Home() {
     const flushed = layers.map(l => {
       if (l.type !== "text") return l;
       const domEl = canvasRef.current?.querySelector(`[data-textbox-id="${l.id}"] [data-text-content]`);
-      const liveText = domEl ? domEl.innerText : l.text;
-      return liveText !== l.text ? { ...l, text: liveText } : l;
+      if (!domEl) return l;
+      const liveText = domEl.innerText;
+      const liveHtml = domEl.innerHTML;
+      return (liveText !== l.text || liveHtml !== l.html)
+        ? { ...l, text: liveText, html: liveHtml }
+        : l;
     });
     setActiveEl(null);
     set({ layers: flushed });
@@ -657,27 +753,88 @@ export default function Home() {
           withRotation(layer, boxW, estimatedH, () => {
             ctx.save();
             const fontFamily = FONT_OPTIONS[layer.font || "sans"].family.replace(/'/g, "");
-            const font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px ${fontFamily}`;
-            ctx.font = font; ctx.fillStyle = layer.color || "#fff";
-            ctx.textAlign = layer.align || "left";
+            const baseFontSize = layer.fontSize || 18;
+            const padLeft = 26, wrapW = boxW - padLeft - 4;
+            const baseX = (layer.align === "left") ? layer.x + padLeft : (layer.align === "center") ? layer.x + padLeft + wrapW / 2 : layer.x + padLeft + wrapW;
+
             ctx.shadowColor = "rgba(0,0,0,0.8)";
             ctx.shadowBlur = (layer.style === "plain" || layer.style === "pill") ? 0 : 8;
+            ctx.textAlign = layer.align || "left";
+
             if (layer.style === "pill") {
-              const lines = layer.text.split("\n"), lh = (layer.fontSize || 18) * 1.4;
+              const lh = baseFontSize * 1.4;
+              const lines = layer.text.split("\n").length;
               ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 0;
-              ctx.beginPath(); ctx.roundRect(layer.x, layer.y, boxW, lines.length * lh + 12, 6); ctx.fill();
-              ctx.fillStyle = layer.color || "#fff";
+              ctx.beginPath(); ctx.roundRect(layer.x, layer.y, boxW, lines * lh + 12, 6); ctx.fill();
+              ctx.shadowBlur = 0;
             }
-            const padLeft = 26, wrapW = boxW - padLeft - 4;
-            const drawX = (layer.align === "left") ? layer.x + padLeft : (layer.align === "center") ? layer.x + padLeft + wrapW / 2 : layer.x + padLeft + wrapW;
-            ctx.font = font;
-            const allLines = [];
-            layer.text.split("\n").forEach(para => {
-              const words = para.split(" "); let line = "";
-              words.forEach(word => { const t = line ? line + " " + word : word; if (ctx.measureText(t).width > wrapW && line) { allLines.push(line); line = word; } else line = t; });
-              allLines.push(line);
+
+            // Parse HTML into styled text runs
+            const parseHtmlRuns = (html) => {
+              if (!html) return [{ text: layer.text, bold: layer.bold, color: layer.color || "#fff" }];
+              const div = document.createElement("div");
+              div.innerHTML = html;
+              const runs = [];
+              const walk = (node, bold, color) => {
+                if (node.nodeType === 3) { // text node
+                  if (node.textContent) runs.push({ text: node.textContent, bold, color });
+                } else if (node.nodeType === 1) {
+                  let b = bold || node.tagName === "B" || node.tagName === "STRONG" || node.style?.fontWeight === "bold" || node.style?.fontWeight === "700";
+                  let c = node.style?.color || color;
+                  if (node.tagName === "BR") { runs.push({ text: "\n", bold, color }); return; }
+                  node.childNodes.forEach(child => walk(child, b, c));
+                }
+              };
+              div.childNodes.forEach(n => walk(n, layer.bold || false, layer.color || "#fff"));
+              return runs.length > 0 ? runs : [{ text: layer.text, bold: layer.bold, color: layer.color || "#fff" }];
+            };
+
+            const runs = parseHtmlRuns(layer.html);
+
+            // Rebuild runs into wrapped lines, preserving per-run styling
+            const buildLines = () => {
+              const lines = [[]]; // array of arrays of {text, bold, color}
+              let currentLine = lines[0];
+              for (const run of runs) {
+                const parts = run.text.split("\n");
+                parts.forEach((part, pi) => {
+                  if (pi > 0) { const newLine = []; lines.push(newLine); currentLine = newLine; }
+                  if (!part) return;
+                  // Word-wrap within this run
+                  const words = part.split(" ");
+                  words.forEach((word, wi) => {
+                    const testWord = wi === 0 ? word : " " + word;
+                    currentLine.push({ text: testWord, bold: run.bold, color: run.color });
+                  });
+                });
+              }
+              return lines;
+            };
+
+            const lines = buildLines();
+            lines.forEach((lineRuns, lineIdx) => {
+              let curX = baseX;
+              const y = layer.y + baseFontSize + lineIdx * baseFontSize * 1.5;
+              if (layer.align !== "left") {
+                // Measure total line width to position center/right
+                let totalW = 0;
+                lineRuns.forEach(r => {
+                  const f = `${r.bold ? "700" : "400"} ${baseFontSize}px ${fontFamily}`;
+                  ctx.font = f;
+                  totalW += ctx.measureText(r.text).width;
+                });
+                curX = layer.align === "center" ? baseX - totalW / 2 : baseX - totalW;
+              }
+              lineRuns.forEach(r => {
+                const f = `${r.bold ? "700" : "400"} ${baseFontSize}px ${fontFamily}`;
+                ctx.font = f;
+                ctx.fillStyle = r.color || "#fff";
+                ctx.textAlign = "left"; // always left for run-by-run drawing
+                ctx.fillText(r.text, curX, y);
+                curX += ctx.measureText(r.text).width;
+              });
             });
-            allLines.forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
+
             ctx.restore();
           });
         }
@@ -704,27 +861,23 @@ export default function Home() {
     try { if (document.fonts?.ready) await document.fonts.ready; } catch (e) {}
 
     try {
-      // Render a proper thumbnail at 300px wide
-      const thumbW = 300;
+      // ── Render thumbnail ──────────────────────────────────────────
+      const thumbW = 200; // smaller = less storage
       const thumbH = Math.round(thumbW * (sz.h / sz.w));
       const c = document.createElement("canvas");
       c.width = thumbW; c.height = thumbH;
       const ctx = c.getContext("2d");
-      // Scale so all coordinates in sz.w/sz.h space map to thumbnail
-      const scaleX = thumbW / sz.w, scaleY = thumbH / sz.h;
-      ctx.scale(scaleX, scaleY);
+      ctx.scale(thumbW / sz.w, thumbH / sz.h);
 
-      // White base
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, sz.w, sz.h);
+      ctx.fillStyle = "#1a1a24"; ctx.fillRect(0, 0, sz.w, sz.h);
 
-      // Background
       if (bg?.type === "photo" && bg.src) {
         await new Promise(res => {
           const img = new window.Image();
           img.onload = () => {
             const sc = Math.max(sz.w / img.width, sz.h / img.height);
             const dw = img.width * sc, dh = img.height * sc;
-            ctx.drawImage(img, (sz.w - dw) * (bg.ox / 100), (sz.h - dh) * (bg.oy / 100), dw, dh);
+            ctx.drawImage(img, (sz.w - dw) * ((bg.ox || 50) / 100), (sz.h - dh) * ((bg.oy || 50) / 100), dw, dh);
             res();
           };
           img.onerror = res; img.src = bg.src;
@@ -739,61 +892,77 @@ export default function Home() {
         ctx.fillStyle = g; ctx.fillRect(0, 0, sz.w, sz.h);
       }
 
-      // Draw image layers
-      for (const layer of flushed) {
-        if (layer.visible === false || layer.type !== "image") continue;
-        await new Promise(res => {
-          const img = new window.Image();
-          img.onload = () => {
-            ctx.save();
-            if (layer.rotation) { const cx = layer.x + layer.w / 2, cy = layer.y + layer.h / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
-            ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
-            const sc = Math.max(layer.w / img.width, layer.h / img.height), dw = img.width * sc, dh = img.height * sc;
-            ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
-            ctx.restore(); res();
-          };
-          img.onerror = res; img.src = layer.src;
-        });
-      }
-
-      // Draw stickers and text
       for (const layer of flushed) {
         if (layer.visible === false) continue;
+        if (layer.type === "image" && layer.src) {
+          await new Promise(res => {
+            const img = new window.Image();
+            img.onload = () => {
+              ctx.save();
+              if (layer.rotation) { const lcx = layer.x + layer.w/2, lcy = layer.y + layer.h/2; ctx.translate(lcx, lcy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-lcx, -lcy); }
+              ctx.beginPath(); ctx.rect(layer.x, layer.y, layer.w, layer.h); ctx.clip();
+              const sc = Math.max(layer.w / img.width, layer.h / img.height), dw = img.width * sc, dh = img.height * sc;
+              ctx.drawImage(img, layer.x + (layer.w - dw) * ((layer.ox ?? 50) / 100), layer.y + (layer.h - dh) * ((layer.oy ?? 50) / 100), dw, dh);
+              ctx.restore(); res();
+            };
+            img.onerror = res; img.src = layer.src;
+          });
+        }
         if (layer.type === "sticker") {
           ctx.save();
-          if (layer.rotation) { const cx = layer.x + (layer.size || 60) / 2, cy = layer.y + (layer.size || 60) / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
-          ctx.font = `${Math.round((layer.size || 60) * 0.75)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",serif`;
-          ctx.textAlign = "center"; ctx.textBaseline = "middle";
-          ctx.fillStyle = "black";
-          ctx.fillText(layer.emoji, layer.x + (layer.size || 60) / 2, layer.y + (layer.size || 60) / 2);
+          if (layer.rotation) { const lcx = layer.x + (layer.size||60)/2, lcy = layer.y + (layer.size||60)/2; ctx.translate(lcx, lcy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-lcx, -lcy); }
+          ctx.font = `${Math.round((layer.size||60)*0.75)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",serif`;
+          ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "black";
+          ctx.fillText(layer.emoji, layer.x + (layer.size||60)/2, layer.y + (layer.size||60)/2);
           ctx.restore();
         }
         if (layer.type === "text" && layer.text?.trim()) {
           ctx.save();
-          if (layer.rotation) { const tw = Math.max(80, 600 - layer.x - 16), th = (layer.fontSize || 18) * 2; const cx = layer.x + tw / 2, cy = layer.y + th / 2; ctx.translate(cx, cy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-cx, -cy); }
-          ctx.font = `${layer.bold ? "700" : "400"} ${layer.fontSize || 18}px sans-serif`;
-          ctx.fillStyle = layer.color || "#fff";
-          ctx.textAlign = layer.align || "left";
+          if (layer.rotation) { const tw = Math.max(80, 600 - layer.x - 16); const lcx = layer.x + tw/2, lcy = layer.y + (layer.fontSize||18); ctx.translate(lcx, lcy); ctx.rotate(layer.rotation * Math.PI / 180); ctx.translate(-lcx, -lcy); }
+          ctx.font = `${layer.bold ? "700" : "400"} ${layer.fontSize||18}px sans-serif`;
+          ctx.fillStyle = layer.color || "#fff"; ctx.textAlign = layer.align || "left";
           ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6;
-          const padLeft = 26, drawX = layer.x + padLeft;
-          layer.text.split("\n").forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize || 18) + i * (layer.fontSize || 18) * 1.5));
+          const drawX = layer.x + 26;
+          layer.text.split("\n").forEach((line, i) => ctx.fillText(line, drawX, layer.y + (layer.fontSize||18) + i * (layer.fontSize||18) * 1.5));
           ctx.restore();
         }
       }
 
-      const thumb = c.toDataURL("image/jpeg", 0.7);
+      // Compress thumbnail aggressively — max ~30KB
+      const thumb = c.toDataURL("image/jpeg", 0.5);
+
+      // ── Strip base64 src from layers for storage (keep everything else) ──
+      // Image src data can be 500KB–2MB each — far too large for localStorage
+      // We store layers without src; when reopened, images show as placeholders
+      const strippedLayers = flushed.map(l => {
+        if (l.type === "image") return { ...l, src: "" }; // strip large base64
+        return l;
+      });
+      const strippedBg = bg?.type === "photo" ? { ...bg, src: "" } : bg;
+
       const designs = JSON.parse(localStorage.getItem("ambaig_designs") || "[]");
       const design = {
-        id: Date.now(), savedAt: new Date().toISOString(),
+        id: Date.now(),
+        savedAt: new Date().toISOString(),
         name: flushed.find(l => l.type === "text")?.text?.slice(0, 30) || `Design ${designs.length + 1}`,
-        thumb, state: { canvasSize, bg, bgOpacity, layers: flushed },
+        thumb,
+        state: { canvasSize, bg: strippedBg, bgOpacity, layers: strippedLayers },
       };
       designs.unshift(design);
-      localStorage.setItem("ambaig_designs", JSON.stringify(designs.slice(0, 20)));
-      showToast("✅ Saved to My Designs");
+
+      try {
+        localStorage.setItem("ambaig_designs", JSON.stringify(designs.slice(0, 20)));
+        showToast("✅ Saved to My Designs");
+      } catch (storageErr) {
+        // If still too large, save without thumbnail
+        design.thumb = "";
+        designs[0] = design;
+        localStorage.setItem("ambaig_designs", JSON.stringify(designs.slice(0, 20)));
+        showToast("✅ Saved (without thumbnail — storage full)");
+      }
     } catch (e) {
-      console.error(e);
-      showToast("⚠️ Could not save to gallery.");
+      console.error("saveToGallery error:", e);
+      showToast("⚠️ Could not save — " + (e.message || "unknown error"));
     }
   };
 
@@ -849,6 +1018,7 @@ export default function Home() {
                     <span onClick={() => setActiveEl({ type: layer.type, id: layer.id })} style={{ flex: 1, fontSize: "0.75rem", color: isActive ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                     <button onClick={() => updateLayer(layer.id, { visible: !(layer.visible !== false) })} title={layer.visible !== false ? "Hide" : "Show"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: layer.visible !== false ? "var(--text-muted)" : "var(--text-dim)" }}>{layer.visible !== false ? "👁" : "🚫"}</button>
                     <button onClick={() => updateLayer(layer.id, { locked: !layer.locked })} title={layer.locked ? "Unlock" : "Lock"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-muted)" }}>{layer.locked ? "🔒" : "🔓"}</button>
+                    <button onClick={() => duplicateLayer(layer.id)} title="Duplicate" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-muted)" }}>⧉</button>
                     <button onClick={() => moveLayerUp(layer.id)} title="Move up" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-dim)" }}>↑</button>
                     <button onClick={() => moveLayerDown(layer.id)} title="Move down" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--text-dim)" }}>↓</button>
                     <button onClick={() => removeLayer(layer.id)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", padding: "2px 3px", color: "var(--danger)" }}>🗑</button>
@@ -1057,6 +1227,7 @@ export default function Home() {
                     onUpdate: (patch) => silentUpdateLayer(layer.id, patch),
                     onCommit: () => commitLayer(),
                     onRemove: () => removeLayer(layer.id),
+                    onDuplicate: () => duplicateLayer(layer.id),
                   };
                   if (layer.type === "image")   return <ImageLayer   {...commonProps} layer={layer} />;
                   if (layer.type === "sticker") return <StickerLayer {...commonProps} layer={layer} />;
