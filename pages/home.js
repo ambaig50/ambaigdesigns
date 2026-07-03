@@ -546,32 +546,47 @@ export default function Home() {
   }, [present]); // watch present so SILENT (drag) updates also save
 
   // ── Load pending captions from captions page ──
-  // Uses a ref to avoid stale closure — layers may have just been restored
-  // from localStorage in the previous effect, and this must merge with the LATEST value
+  // Must re-run on every navigation to /home, not just mount,
+  // because Next.js Pages Router doesn't unmount the component on same-route navigation
   const layersRef = useRef(layers);
   useEffect(() => { layersRef.current = layers; }, [layers]);
 
+  const processPendingText = useCallback(() => {
+    try {
+      const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
+      if (pending.length > 0) {
+        const newLayers = pending.map((p, i) => ({
+          id: Date.now() + i, type: "text", text: p.text,
+          x: 16, y: Math.min(820, 500 + i * 90),
+          color: p.color || "#ffffff",
+          fontSize: p.fontSize ? Number(p.fontSize) : 22,
+          bold: false, align: "left", style: "shadow", font: "sans",
+          visible: true, locked: false,
+        }));
+        set({ layers: [...layersRef.current, ...newLayers] });
+        localStorage.removeItem("ambaig_pending_text");
+        showToast(`✅ Caption placed at ${newLayers[0]?.fontSize}px — drag to reposition`);
+      }
+    } catch (e) {}
+  }, []);
+
+  // Fire on mount (first visit)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
-        if (pending.length > 0) {
-          const newLayers = pending.map((p, i) => ({
-            id: Date.now() + i, type: "text", text: p.text,
-            x: 16, y: Math.min(820, 500 + i * 90),
-            color: p.color || "#ffffff",
-            fontSize: p.fontSize ? Number(p.fontSize) : 22, // explicit Number() cast
-            bold: false, align: "left", style: "shadow", font: "sans",
-            visible: true, locked: false,
-          }));
-          set({ layers: [...layersRef.current, ...newLayers] });
-          localStorage.removeItem("ambaig_pending_text");
-          showToast(`✅ Caption placed at ${newLayers[0]?.fontSize}px — drag to reposition`);
-        }
-      } catch (e) {}
-    }, 600); // generous delay to ensure RESET dispatch has fully settled
+    const timer = setTimeout(processPendingText, 600);
     return () => clearTimeout(timer);
   }, []);
+
+  // Fire on every route change TO /home (covers "Back to Studio" navigation)
+  useEffect(() => {
+    const handleRouteChange = (url) => {
+      if (url === "/home" || url.startsWith("/home?")) {
+        // Small delay so canvas state restore completes first
+        setTimeout(processPendingText, 400);
+      }
+    };
+    router.events.on("routeChangeComplete", handleRouteChange);
+    return () => router.events.off("routeChangeComplete", handleRouteChange);
+  }, [processPendingText]);
 
   // ── Layer helpers ──
   // Discrete update — commits to undo history (add, delete, style change, etc.)
