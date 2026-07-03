@@ -47,10 +47,9 @@ export default function Captions() {
   const [canvasFontSize, setCanvasFontSize] = useState(16);
 
   const LANGS = [
-    { key: "english",    label: "English",       flag: "🇬🇧" },
-    { key: "urdu",       label: "اردو",           flag: "🇵🇰" },
-    { key: "roman_urdu", label: "Roman Urdu",     flag: "🇵🇰" },
-    { key: "bilingual",  label: "Urdu + English", flag: "🌐" },
+    { key: "english",    label: "English",    flag: "🇬🇧" },
+    { key: "urdu",       label: "اردو",        flag: "🇵🇰" },
+    { key: "roman_urdu", label: "Roman Urdu",  flag: "🇵🇰" },
   ];
 
   const TONES = [
@@ -271,7 +270,7 @@ export default function Captions() {
           {/* Language selector */}
           <div className="card" style={{ padding: "12px 14px" }}>
             <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Language</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, marginBottom: 12 }}>
               {LANGS.map(({ key, label, flag }) => (
                 <button key={key} onClick={() => handleLangChange(key)} disabled={loading} style={{
                   padding: "7px 8px", borderRadius: 7, fontSize: "0.78rem", fontWeight: 600, textAlign: "left",
