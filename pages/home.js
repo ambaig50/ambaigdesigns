@@ -1261,12 +1261,12 @@ export default function Home() {
 
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
-        .studio-layout { display: flex; flex-direction: row; gap: 16px; padding: 0 16px 80px; align-items: flex-start; }
-        .studio-panel { width: 240px; min-width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
-        .studio-canvas-wrap { flex: 1; min-width: 0; }
+        .studio-layout { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 80px; }
+        .studio-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; align-items: start; }
+        .studio-canvas-wrap { width: 100%; }
         @media (max-width: 768px) {
-          .studio-layout { flex-direction: column; padding: 0 10px 80px; gap: 12px; }
-          .studio-panel { width: 100%; position: static; max-height: none; overflow-y: visible; }
+          .studio-layout { padding: 0 8px 80px; gap: 10px; }
+          .studio-panel { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
