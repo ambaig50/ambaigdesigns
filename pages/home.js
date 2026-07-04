@@ -546,12 +546,10 @@ export default function Home() {
   }, [present]); // watch present so SILENT (drag) updates also save
 
   // ── Load pending captions from captions page ──
-  // Must re-run on every navigation to /home, not just mount,
-  // because Next.js Pages Router doesn't unmount the component on same-route navigation
   const layersRef = useRef(layers);
   useEffect(() => { layersRef.current = layers; }, [layers]);
 
-  const processPendingText = useCallback(() => {
+  const processPendingText = () => {
     try {
       const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
       if (pending.length > 0) {
@@ -563,30 +561,25 @@ export default function Home() {
           bold: false, align: "left", style: "shadow", font: "sans",
           visible: true, locked: false,
         }));
-        set({ layers: [...layersRef.current, ...newLayers] });
+        dispatch({ type: "SET", payload: { layers: [...layersRef.current, ...newLayers] } });
         localStorage.removeItem("ambaig_pending_text");
-        showToast(`✅ Caption placed at ${newLayers[0]?.fontSize}px — drag to reposition`);
+        showToast("Caption placed on canvas — drag to reposition");
       }
-    } catch (e) {}
-  }, []);
+    } catch (e) { console.error("pending text error", e); }
+  };
 
-  // Fire on mount (first visit)
+  // Fire on mount
   useEffect(() => {
     const timer = setTimeout(processPendingText, 600);
     return () => clearTimeout(timer);
   }, []);
 
-  // Fire on every route change TO /home (covers "Back to Studio" navigation)
+  // Fire when navigating back from Captions with ?addCaption= param
   useEffect(() => {
-    const handleRouteChange = (url) => {
-      if (url === "/home" || url.startsWith("/home?")) {
-        // Small delay so canvas state restore completes first
-        setTimeout(processPendingText, 400);
-      }
-    };
-    router.events.on("routeChangeComplete", handleRouteChange);
-    return () => router.events.off("routeChangeComplete", handleRouteChange);
-  }, [processPendingText]);
+    if (router.query.addCaption) {
+      setTimeout(processPendingText, 300);
+    }
+  }, [router.query.addCaption]);
 
   // ── Layer helpers ──
   // Discrete update — commits to undo history (add, delete, style change, etc.)
