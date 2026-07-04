@@ -557,22 +557,27 @@ export default function Home() {
   // Fire when navigating back from Captions with ?addCaption= param
   useEffect(() => {
     if (!router.query.addCaption) return;
-    // Read fresh from localStorage — no closures involved
     const timer = setTimeout(() => {
       try {
         const raw = localStorage.getItem("ambaig_pending_text");
         if (!raw) return;
         const pending = JSON.parse(raw);
         if (!pending?.length) return;
+
+        // Read canvas size FRESH from localStorage — sz from closure would be stale
+        const savedState = JSON.parse(localStorage.getItem("ambaig_canvas_state") || "{}");
+        const currentSize = savedState.canvasSize || "portrait";
+        const SIZES_LOCAL = { portrait: { w: 600, h: 900 }, square: { w: 600, h: 600 }, landscape: { w: 800, h: 450 } };
+        const currentSz = SIZES_LOCAL[currentSize] || SIZES_LOCAL.portrait;
+
         const newLayers = pending.map((p, i) => ({
           id: Date.now() + i, type: "text", text: p.text,
-          x: 16, y: Math.min(sz.h - 60, Math.round(sz.h * 0.6) + i * 60),
+          x: 16, y: Math.min(currentSz.h - 60, Math.round(currentSz.h * 0.6) + i * 60),
           color: p.color || "#ffffff",
           fontSize: p.fontSize ? Number(p.fontSize) : 22,
           bold: false, align: "left", style: "shadow", font: "sans",
           visible: true, locked: false,
         }));
-        // Use FUNCTIONAL dispatch pattern — receives current state, no stale closure
         dispatchRef.current({
           type: "SET",
           payload: { layers: [...layersRef.current, ...newLayers] }
