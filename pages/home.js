@@ -566,7 +566,7 @@ export default function Home() {
         if (!pending?.length) return;
         const newLayers = pending.map((p, i) => ({
           id: Date.now() + i, type: "text", text: p.text,
-          x: 16, y: Math.min(820, 500 + i * 90),
+          x: 16, y: Math.min(sz.h - 60, Math.round(sz.h * 0.6) + i * 60),
           color: p.color || "#ffffff",
           fontSize: p.fontSize ? Number(p.fontSize) : 22,
           bold: false, align: "left", style: "shadow", font: "sans",
