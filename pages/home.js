@@ -546,13 +546,24 @@ export default function Home() {
   }, [present]); // watch present so SILENT (drag) updates also save
 
   // ── Load pending captions from captions page ──
+  // Use refs for everything to avoid ANY stale closure issues
   const layersRef = useRef(layers);
+  const dispatchRef = useRef(dispatch);
+  const showToastRef = useRef(showToast);
   useEffect(() => { layersRef.current = layers; }, [layers]);
+  useEffect(() => { dispatchRef.current = dispatch; }, [dispatch]);
+  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
 
-  const processPendingText = () => {
-    try {
-      const pending = JSON.parse(localStorage.getItem("ambaig_pending_text") || "[]");
-      if (pending.length > 0) {
+  // Fire when navigating back from Captions with ?addCaption= param
+  useEffect(() => {
+    if (!router.query.addCaption) return;
+    // Read fresh from localStorage — no closures involved
+    const timer = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem("ambaig_pending_text");
+        if (!raw) return;
+        const pending = JSON.parse(raw);
+        if (!pending?.length) return;
         const newLayers = pending.map((p, i) => ({
           id: Date.now() + i, type: "text", text: p.text,
           x: 16, y: Math.min(820, 500 + i * 90),
@@ -561,24 +572,16 @@ export default function Home() {
           bold: false, align: "left", style: "shadow", font: "sans",
           visible: true, locked: false,
         }));
-        dispatch({ type: "SET", payload: { layers: [...layersRef.current, ...newLayers] } });
+        // Use FUNCTIONAL dispatch pattern — receives current state, no stale closure
+        dispatchRef.current({
+          type: "SET",
+          payload: { layers: [...layersRef.current, ...newLayers] }
+        });
         localStorage.removeItem("ambaig_pending_text");
-        showToast("Caption placed on canvas — drag to reposition");
-      }
-    } catch (e) { console.error("pending text error", e); }
-  };
-
-  // Fire on mount
-  useEffect(() => {
-    const timer = setTimeout(processPendingText, 600);
+        showToastRef.current("✅ Caption added to canvas — drag to reposition");
+      } catch (e) { console.error("pending text error:", e); }
+    }, 200);
     return () => clearTimeout(timer);
-  }, []);
-
-  // Fire when navigating back from Captions with ?addCaption= param
-  useEffect(() => {
-    if (router.query.addCaption) {
-      setTimeout(processPendingText, 300);
-    }
   }, [router.query.addCaption]);
 
   // ── Layer helpers ──
