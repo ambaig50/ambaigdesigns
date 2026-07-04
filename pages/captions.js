@@ -163,8 +163,9 @@ export default function Captions() {
   };
 
   const goBackToStudio = () => {
-    // Navigate to home — the useEffect there will pick up pending text
-    router.push("/home");
+    // Pass a timestamp param so home.js can detect this specific navigation
+    // and process pending text even if it was already on /home
+    router.push(`/home?addCaption=${Date.now()}`);
   };
 
   const goToPost = () => {
