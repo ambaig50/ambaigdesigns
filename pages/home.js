@@ -1140,14 +1140,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Images */}
-          <div className="card">
-            <p className="plabel">Overlay Image</p>
-            <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImageLayer} />
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={() => imgFileRef.current?.click()}>+ Add Image Layer</button>
-            {layers.filter(l => l.type === "image").length > 0 && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>{layers.filter(l => l.type === "image").length} image(s)</p>}
-          </div>
-
           {/* Text Style */}
           <div className="card">
             <p className="plabel">Text Style</p>
@@ -1200,24 +1192,31 @@ export default function Home() {
             })()}
           </div>
 
-          {/* Add Text */}
+          {/* Add Text + Image — merged */}
           <div className="card">
-            <p className="plabel">Add Text</p>
+            <p className="plabel">Add Layers</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImageLayer} />
+              <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => imgFileRef.current?.click()}>
+                🖼 Add Image Layer
+                {layers.filter(l => l.type === "image").length > 0 && <span style={{ marginLeft: 6, fontSize: "0.68rem", color: "var(--text-dim)" }}>({layers.filter(l => l.type === "image").length})</span>}
+              </button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>+ Add Title</button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false)}>+ Add Description</button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox()}>+ Add Text Box</button>
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <p className="plabel">Export & Share</p>
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>{saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}</button>
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={saveToGallery}>📁 Save to My Designs</button>
-            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>📤 Go to Post Manager →</button>
-            <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>✨ Generate Captions →</button>
-            <button onClick={clearCanvas} style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}>🗑 Clear & New Design</button>
+          {/* Export & Share — full width horizontal */}
+          <div className="card export-card">
+            <p className="plabel" style={{ marginBottom: 10 }}>Export & Share</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", whiteSpace: "nowrap" }} onClick={downloadPNG} disabled={saving}>{saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}</button>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", borderColor: "var(--success)", color: "var(--success)", whiteSpace: "nowrap" }} onClick={saveToGallery}>📁 Save to My Designs</button>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", borderColor: "var(--success)", color: "var(--success)", whiteSpace: "nowrap" }} onClick={goToPost}>📤 Go to Post Manager</button>
+              <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center", whiteSpace: "nowrap" }} onClick={goToCaptions}>✨ Generate Captions →</button>
+              <button onClick={clearCanvas} style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem", whiteSpace: "nowrap" }}>🗑 Clear & New Design</button>
+            </div>
           </div>
         </div>
 
@@ -1271,6 +1270,7 @@ export default function Home() {
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
         .studio-layout { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 80px; }
         .studio-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: stretch; }
+        .export-card { grid-column: 1 / -1; } /* span all columns */
         .studio-canvas-wrap { width: 100%; }
         @media (max-width: 768px) {
           .studio-layout { padding: 0 8px 80px; gap: 10px; }
