@@ -1148,9 +1148,9 @@ export default function Home() {
             {layers.filter(l => l.type === "image").length > 0 && <p style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginTop: 5 }}>{layers.filter(l => l.type === "image").length} image(s)</p>}
           </div>
 
-          {/* Text on canvas */}
+          {/* Text Style */}
           <div className="card">
-            <p className="plabel">Text on Canvas</p>
+            <p className="plabel">Text Style</p>
             {(() => {
               const selBox = activeLayer?.type === "text" ? activeLayer : null;
               const isEditing = !!selBox;
@@ -1172,8 +1172,8 @@ export default function Home() {
                 }
               };
               return (
-                <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: isEditing ? "var(--accent-glow)" : "var(--surface2)", border: isEditing ? "1px solid var(--accent)" : "1px solid var(--border)" }}>
-                  <p style={{ fontSize: "0.7rem", color: isEditing ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>{isEditing ? "✏️ Editing selected text" : "🎨 New text style"}</p>
+                <div style={{ padding: "8px 10px", borderRadius: 10, background: isEditing ? "var(--accent-glow)" : "var(--surface2)", border: isEditing ? "1px solid var(--accent)" : "1px solid var(--border)" }}>
+                  <p style={{ fontSize: "0.68rem", color: isEditing ? "var(--accent)" : "var(--text-muted)", fontWeight: 700, marginBottom: 8 }}>{isEditing ? "✏️ Editing selected text" : "🎨 New text style"}</p>
                   <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}><label className="field-label">Color</label><input type="color" value={curColor} onChange={e => apply({ color: e.target.value })} style={{ width: "100%", height: 30, padding: 2, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer" }} /></div>
                     <div style={{ flex: 1 }}><label className="field-label">Size</label><select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>{[12,14,16,18,20,22,24,28,32,36,40,48,56,64,72].map(s => <option key={s} value={s}>{s}px</option>)}</select></div>
@@ -1181,7 +1181,7 @@ export default function Home() {
                   <label className="field-label">Font</label>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
                     {Object.entries(FONT_OPTIONS).map(([k, f]) => (
-                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "6px 4px", borderRadius: 6, fontSize: "0.85rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family }}>{f.label}</button>
+                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 4px", borderRadius: 6, fontSize: "0.82rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family }}>{f.label}</button>
                     ))}
                   </div>
                   <label className="field-label">Alignment</label>
@@ -1198,7 +1198,12 @@ export default function Home() {
                 </div>
               );
             })()}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          </div>
+
+          {/* Add Text */}
+          <div className="card">
+            <p className="plabel">Add Text</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Title text", textColor, Math.max(fontSize, 28), true)}>+ Add Title</button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox("Description text", textColor, Math.min(fontSize, 16), false)}>+ Add Description</button>
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => addTextBox()}>+ Add Text Box</button>
@@ -1206,11 +1211,14 @@ export default function Home() {
           </div>
 
           {/* Actions */}
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>{saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}</button>
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={saveToGallery}>📁 Save to My Designs</button>
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>📤 Go to Post Manager →</button>
-          <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>✨ Generate Captions →</button>
-          <button onClick={clearCanvas} style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}>🗑 Clear & New Design</button>
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p className="plabel">Export & Share</p>
+            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={downloadPNG} disabled={saving}>{saving ? "⏳ Exporting…" : "💾 Save & Download PNG"}</button>
+            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={saveToGallery}>📁 Save to My Designs</button>
+            <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", borderColor: "var(--success)", color: "var(--success)" }} onClick={goToPost}>📤 Go to Post Manager →</button>
+            <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={goToCaptions}>✨ Generate Captions →</button>
+            <button onClick={clearCanvas} style={{ width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.78rem" }}>🗑 Clear & New Design</button>
+          </div>
         </div>
 
         {/* ── Canvas ── */}
@@ -1262,7 +1270,7 @@ export default function Home() {
       <style jsx>{`
         .plabel { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 9px; }
         .studio-layout { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 80px; }
-        .studio-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; align-items: start; }
+        .studio-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; align-items: stretch; }
         .studio-canvas-wrap { width: 100%; }
         @media (max-width: 768px) {
           .studio-layout { padding: 0 8px 80px; gap: 10px; }
