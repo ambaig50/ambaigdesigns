@@ -11,10 +11,14 @@ const TEXT_STYLES = {
 };
 
 const FONT_OPTIONS = {
-  sans:    { label: "Sans",    family: "'DM Sans', sans-serif" },
-  serif:   { label: "Serif",   family: "'Merriweather', serif" },
-  script:  { label: "Script",  family: "'Pacifico', cursive" },
-  display: { label: "Display", family: "'Bebas Neue', sans-serif" },
+  sans:       { label: "Sans",       family: "'DM Sans', sans-serif" },
+  serif:      { label: "Serif",      family: "'Merriweather', serif" },
+  script:     { label: "Script",     family: "'Pacifico', cursive" },
+  display:    { label: "Display",    family: "'Bebas Neue', sans-serif" },
+  playfair:   { label: "Playfair",   family: "'Playfair Display', serif" },
+  montserrat: { label: "Montserrat", family: "'Montserrat', sans-serif" },
+  lato:       { label: "Lato",       family: "'Lato', sans-serif" },
+  dancing:    { label: "Dancing",    family: "'Dancing Script', cursive" },
 };
 
 const SIZES = {
@@ -24,14 +28,18 @@ const SIZES = {
 };
 
 const STICKER_SETS = {
-  "⭐ Stars":    ["⭐","🌟","✨","💫","🌙","☀️","🌈","❄️"],
-  "❤️ Hearts":   ["❤️","🧡","💛","💚","💙","💜","🖤","🤍"],
-  "🎉 Party":    ["🎉","🎊","🎈","🥳","🎁","🎀","🏆","🥇"],
-  "📌 Markers":  ["📌","🔖","📍","🏷️","💡","🔥","⚡","❗"],
-  "😊 Faces":    ["😊","😍","🥰","😎","🤩","😂","🙌","👏"],
-  "🌸 Nature":   ["🌸","🌺","🌻","🌹","🍃","🌿","🦋","🌊"],
-  "◆ Shapes":    ["⬛","🔴","🟡","🟢","🔵","🟣","🟠","⬜"],
-  "➡️ Arrows":   ["➡️","⬅️","⬆️","⬇️","↗️","↘️","🔄","↩️"],
+  "⭐ Stars":       ["⭐","🌟","✨","💫","🌙","☀️","🌈","❄️"],
+  "❤️ Hearts":      ["❤️","🧡","💛","💚","💙","💜","🖤","🤍"],
+  "🎉 Party":       ["🎉","🎊","🎈","🥳","🎁","🎀","🏆","🥇"],
+  "📌 Markers":     ["📌","🔖","📍","🏷️","💡","🔥","⚡","❗"],
+  "😊 Faces":       ["😊","😍","🥰","😎","🤩","😂","🙌","👏"],
+  "🌸 Nature":      ["🌸","🌺","🌻","🌹","🍃","🌿","🦋","🌊"],
+  "◆ Shapes":       ["⬛","🔴","🟡","🟢","🔵","🟣","🟠","⬜"],
+  "➡️ Arrows":      ["➡️","⬅️","⬆️","⬇️","↗️","↘️","🔄","↩️"],
+  "🕌 Islamic":     ["🕌","🕋","☪️","📿","🌙","⭐","🤲","📖"],
+  "🎊 Eid":         ["🎊","🌙","⭐","🕌","🎁","🥰","✨","🤲"],
+  "🇵🇰 Pakistan":  ["🇵🇰","🏏","🎵","🌹","🍛","🫖","🌴","💚"],
+  "🌿 Cultural":    ["🌿","🌺","🪔","🎋","🏵️","🌾","🪷","🫶"],
 };
 
 // ── Canvas state shape ───────────────────────────────────────────
@@ -1008,17 +1016,6 @@ export default function Home() {
         {/* ── Left panel ── */}
         <div className="studio-panel">
 
-          {/* Undo / Redo */}
-          <div className="card" style={{ padding: "10px 12px" }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={undo} disabled={!past.length} title="Undo (Ctrl+Z)">↩ Undo</button>
-              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem" }} onClick={redo} disabled={!future.length} title="Redo (Ctrl+Y)">↪ Redo</button>
-              <button className="btn btn-ghost" style={{ padding: "8px", fontSize: "0.78rem" }} onClick={() => setShowLayerPanel(p => !p)} title="Layer panel">
-                {showLayerPanel ? "✕" : "☰"}
-              </button>
-            </div>
-          </div>
-
           {/* Layer panel */}
           {showLayerPanel && (
             <div className="card">
@@ -1171,9 +1168,9 @@ export default function Home() {
                     <div style={{ flex: 1 }}><label className="field-label">Size</label><select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>{[12,14,16,18,20,22,24,28,32,36,40,48,56,64,72].map(s => <option key={s} value={s}>{s}px</option>)}</select></div>
                   </div>
                   <label className="field-label">Font</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 8 }}>
                     {Object.entries(FONT_OPTIONS).map(([k, f]) => (
-                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 4px", borderRadius: 6, fontSize: "0.82rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family }}>{f.label}</button>
+                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 2px", borderRadius: 6, fontSize: "0.75rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family, textAlign: "center" }}>{f.label}</button>
                     ))}
                   </div>
                   <label className="field-label">Alignment</label>
@@ -1192,9 +1189,14 @@ export default function Home() {
             })()}
           </div>
 
-          {/* Add Text + Image — merged */}
+          {/* Add Text + Image + Undo — merged */}
           <div className="card">
-            <p className="plabel">Add Layers</p>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+              <p className="plabel" style={{ flex: 1, margin: 0 }}>Add Layers</p>
+              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={undo} disabled={!past.length} title="Undo (Ctrl+Z)">↩</button>
+              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={redo} disabled={!future.length} title="Redo (Ctrl+Y)">↪</button>
+              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={() => setShowLayerPanel(p => !p)} title="Layer panel">{showLayerPanel ? "✕" : "☰"}</button>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImageLayer} />
               <button className="btn btn-ghost" style={{ justifyContent: "center" }} onClick={() => imgFileRef.current?.click()}>
