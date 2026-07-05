@@ -1168,9 +1168,9 @@ export default function Home() {
                     <div style={{ flex: 1 }}><label className="field-label">Size</label><select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>{[12,14,16,18,20,22,24,28,32,36,40,48,56,64,72].map(s => <option key={s} value={s}>{s}px</option>)}</select></div>
                   </div>
                   <label className="field-label">Font</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
                     {Object.entries(FONT_OPTIONS).map(([k, f]) => (
-                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 2px", borderRadius: 6, fontSize: "0.75rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family, textAlign: "center" }}>{f.label}</button>
+                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 4px", borderRadius: 6, fontSize: "0.75rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</button>
                     ))}
                   </div>
                   <label className="field-label">Alignment</label>
@@ -1191,11 +1191,11 @@ export default function Home() {
 
           {/* Add Text + Image + Undo — merged */}
           <div className="card">
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
               <p className="plabel" style={{ flex: 1, margin: 0 }}>Add Layers</p>
-              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={undo} disabled={!past.length} title="Undo (Ctrl+Z)">↩</button>
-              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={redo} disabled={!future.length} title="Redo (Ctrl+Y)">↪</button>
-              <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.72rem" }} onClick={() => setShowLayerPanel(p => !p)} title="Layer panel">{showLayerPanel ? "✕" : "☰"}</button>
+              <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: "0.75rem", gap: 4 }} onClick={undo} disabled={!past.length} title="Undo (Ctrl+Z)">↩ Undo</button>
+              <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: "0.75rem", gap: 4 }} onClick={redo} disabled={!future.length} title="Redo (Ctrl+Y)">↪ Redo</button>
+              <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: "0.75rem" }} onClick={() => setShowLayerPanel(p => !p)} title="Layer panel">{showLayerPanel ? "✕" : "☰"}</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <input type="file" accept="image/*" ref={imgFileRef} style={{ display: "none" }} onChange={addImageLayer} />
