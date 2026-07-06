@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import Head from "next/head";
+import { useState, useEffect } from "react";
 import "../styles/globals.css";
 
 const NAV = [
@@ -12,6 +13,21 @@ const NAV = [
 
 export default function App({ Component, pageProps }) {
   const router = useRouter();
+  const [theme, setTheme] = useState("dark");
+
+  // Load saved theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("ambaig_theme") || "dark";
+    setTheme(saved);
+    document.documentElement.setAttribute("data-theme", saved);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("ambaig_theme", next);
+  };
 
   const defaultHead = (
     <Head>
@@ -49,6 +65,19 @@ export default function App({ Component, pageProps }) {
           ))}
         </nav>
         <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)" }}>
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, width: "100%",
+              padding: "8px 10px", borderRadius: 10, marginBottom: 10,
+              border: "1px solid var(--border)", background: "var(--surface2)",
+              color: "var(--text-muted)", cursor: "pointer", fontSize: "0.82rem", fontWeight: 600,
+            }}
+          >
+            <span style={{ fontSize: "1.1rem" }}>{theme === "dark" ? "☀️" : "🌙"}</span>
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
           <p style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>AmbaigDesigns v1.0</p>
         </div>
       </aside>
@@ -70,6 +99,11 @@ export default function App({ Component, pageProps }) {
             <span className="mobile-tab-label">{label}</span>
           </button>
         ))}
+        {/* Theme toggle in mobile tab bar */}
+        <button className="mobile-tab" onClick={toggleTheme}>
+          <span className="mobile-tab-icon">{theme === "dark" ? "☀️" : "🌙"}</span>
+          <span className="mobile-tab-label">{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
       </nav>
       </div>
     </>
