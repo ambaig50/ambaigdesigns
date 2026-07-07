@@ -19,6 +19,10 @@ const FONT_OPTIONS = {
   montserrat: { label: "Montserrat", family: "'Montserrat', sans-serif" },
   lato:       { label: "Lato",       family: "'Lato', sans-serif" },
   dancing:    { label: "Dancing",    family: "'Dancing Script', cursive" },
+  amiri:      { label: "امیری",      family: "'Amiri', serif" },
+  scheherazade: { label: "شہرزاد",  family: "'Scheherazade New', serif" },
+  noto_arabic:  { label: "نوٹو",     family: "'Noto Nastaliq Urdu', serif" },
+  reem:       { label: "ریم",        family: "'Reem Kufi', sans-serif" },
 };
 
 const SIZES = {
@@ -40,6 +44,12 @@ const STICKER_SETS = {
   "🎊 Eid":         ["🎊","🌙","⭐","🕌","🎁","🥰","✨","🤲"],
   "🇵🇰 Pakistan":  ["🇵🇰","🏏","🎵","🌹","🍛","🫖","🌴","💚"],
   "🌿 Cultural":    ["🌿","🌺","🪔","🎋","🏵️","🌾","🪷","🫶"],
+  "🌙 Ramazan":     ["🌙","⭐","🕌","🪔","📿","🤲","🥮","🌟"],
+  "🎆 New Year":    ["🎆","🎇","✨","🥂","🎉","🎊","🕛","🌟"],
+  "🍕 Food":        ["🍕","🍔","🍜","🍣","🎂","🧁","☕","🍓"],
+  "🫖 Pakistani Food": ["🫖","🍛","🥘","🫓","🍚","🌮","🥗","🍱"],
+  "💼 Business":    ["💼","📊","💡","🎯","🚀","📈","🤝","⭐"],
+  "💬 Quotes":      ["💬","💭","🗣️","✍️","📝","🖊️","📢","🔔"],
 };
 
 // ── Canvas state shape ───────────────────────────────────────────
