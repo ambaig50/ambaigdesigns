@@ -11,14 +11,18 @@ const PLATFORMS = [
 
 // Must match FONT_OPTIONS in home.js so previews render identically
 const FONT_OPTIONS = {
-  sans:       "'DM Sans', sans-serif",
-  serif:      "'Merriweather', serif",
-  script:     "'Pacifico', cursive",
-  display:    "'Bebas Neue', sans-serif",
-  playfair:   "'Playfair Display', serif",
-  montserrat: "'Montserrat', sans-serif",
-  lato:       "'Lato', sans-serif",
-  dancing:    "'Dancing Script', cursive",
+  sans:         "'DM Sans', sans-serif",
+  serif:        "'Merriweather', serif",
+  script:       "'Pacifico', cursive",
+  display:      "'Bebas Neue', sans-serif",
+  playfair:     "'Playfair Display', serif",
+  montserrat:   "'Montserrat', sans-serif",
+  lato:         "'Lato', sans-serif",
+  dancing:      "'Dancing Script', cursive",
+  amiri:        "'Amiri', serif",
+  scheherazade: "'Scheherazade New', serif",
+  noto_arabic:  "'Noto Nastaliq Urdu', serif",
+  reem:         "'Reem Kufi', sans-serif",
 };
 
 export default function Captions() {
