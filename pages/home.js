@@ -455,6 +455,66 @@ function ImageLayer({ layer, onUpdate, onCommit, onRemove, onDuplicate, canvasRe
   );
 }
 
+// ── Font dropdown ────────────────────────────────────────────────
+function FontDropdown({ value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => { document.removeEventListener("mousedown", handler); document.removeEventListener("touchstart", handler); };
+  }, []);
+
+  const current = options[value] || options.sans;
+
+  return (
+    <div ref={ref} style={{ position: "relative", marginBottom: 8 }}>
+      {/* Trigger button */}
+      <button
+        onMouseDown={(e) => { e.preventDefault(); setOpen(o => !o); }}
+        style={{
+          width: "100%", padding: "8px 12px", borderRadius: 8, textAlign: "left",
+          border: "1px solid var(--accent)", background: "var(--accent-glow)",
+          color: "var(--accent)", cursor: "pointer", fontSize: "1rem",
+          fontFamily: current.family, display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+      >
+        <span style={{ fontFamily: current.family }}>{current.label}</span>
+        <span style={{ fontSize: "0.7rem", fontFamily: "DM Sans, sans-serif" }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Dropdown list */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
+          background: "var(--surface)", border: "1px solid var(--accent)", borderRadius: 10,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)", overflow: "hidden", maxHeight: 320, overflowY: "auto",
+        }}>
+          {Object.entries(options).map(([k, f]) => (
+            <button
+              key={k}
+              onMouseDown={(e) => { e.preventDefault(); onChange(k); setOpen(false); }}
+              style={{
+                width: "100%", textAlign: "left", padding: "10px 14px",
+                background: k === value ? "var(--accent-glow)" : "transparent",
+                border: "none", borderBottom: "1px solid var(--border)",
+                color: k === value ? "var(--accent)" : "var(--text)",
+                fontFamily: f.family, fontSize: "1rem", cursor: "pointer",
+                display: "block",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Background photo ─────────────────────────────────────────────
 function BgImage({ src, ox, oy, opacity, onPan }) {
   const startPan = (e) => {
@@ -1178,11 +1238,11 @@ export default function Home() {
                     <div style={{ flex: 1 }}><label className="field-label">Size</label><select value={curSize} onChange={e => apply({ fontSize: Number(e.target.value) })}>{[12,14,16,18,20,22,24,28,32,36,40,48,56,64,72].map(s => <option key={s} value={s}>{s}px</option>)}</select></div>
                   </div>
                   <label className="field-label">Font</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
-                    {Object.entries(FONT_OPTIONS).map(([k, f]) => (
-                      <button key={k} onClick={() => apply({ font: k })} style={{ padding: "5px 4px", borderRadius: 6, fontSize: "0.75rem", border: curFont === k ? "1px solid var(--accent)" : "1px solid var(--border)", background: curFont === k ? "var(--accent-glow)" : "transparent", color: curFont === k ? "var(--accent)" : "var(--text-muted)", cursor: "pointer", fontFamily: f.family, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</button>
-                    ))}
-                  </div>
+                  <FontDropdown
+                    value={curFont}
+                    onChange={(k) => apply({ font: k })}
+                    options={FONT_OPTIONS}
+                  />
                   <label className="field-label">Alignment</label>
                   <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
                     {["left","center","right"].map(a => <button key={a} onClick={() => apply({ align: a })} style={{ flex: 1, padding: "5px 0", borderRadius: 6, fontSize: "0.75rem", border: curAlign === a ? "1px solid var(--accent)" : "1px solid var(--border)", background: curAlign === a ? "var(--accent-glow)" : "transparent", color: curAlign === a ? "var(--accent)" : "var(--text-muted)", cursor: "pointer" }}>{a === "left" ? "⬅" : a === "center" ? "⬛" : "➡"}</button>)}
